@@ -1,0 +1,22 @@
+# Render Blueprint: a free web service running the API and frontend.
+# The database lives elsewhere (e.g. Neon's free tier): paste its connection
+# string into DATABASE_URL when Render asks for it.
+services:
+  - type: web
+    name: laneway-portal
+    runtime: node
+    plan: free
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: node server/index.ts
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: SEED_IF_EMPTY
+        value: "true"
