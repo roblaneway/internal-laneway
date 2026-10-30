@@ -190,7 +190,7 @@ function ClassForm({ cls, onDone }: { cls?: ClassWithCourse; onDone: () => void 
       <div className="grid gap-4">
         <div className="space-y-1.5">
           <Label htmlFor="cl-name">Name</Label>
-          <Input id="cl-name" required value={name} onChange={(e) => setName(e.target.value)} placeholder="DIT Coding — Group B" />
+          <Input id="cl-name" required value={name} onChange={(e) => setName(e.target.value)} placeholder="Dip IT (Web) Foundation — Tue" />
         </div>
         <div className="space-y-1.5">
           <Label>Course</Label>
@@ -222,7 +222,7 @@ function ClassForm({ cls, onDone }: { cls?: ClassWithCourse; onDone: () => void 
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="cl-room">{mode === 'online' ? 'Platform' : 'Room'}</Label>
-            <Input id="cl-room" value={room} onChange={(e) => setRoom(e.target.value)} placeholder={mode === 'online' ? 'Online · Zoom' : 'Melbourne CBD · Room 4.02'} />
+            <Input id="cl-room" value={room} onChange={(e) => setRoom(e.target.value)} placeholder={mode === 'online' ? 'Online · Zoom' : 'Fitzroy St, St Kilda · Classroom 3'} />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="cl-term">Term</Label>

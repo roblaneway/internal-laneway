@@ -210,7 +210,7 @@ export function AppShell() {
 
       <footer className="border-t bg-card print:hidden px-4 py-4 text-xs text-muted-foreground lg:px-8">
         <div className="mx-auto flex max-w-7xl flex-col gap-1 sm:flex-row sm:justify-between">
-          <span>© {new Date().getFullYear()} Laneway Education · Melbourne CBD campus</span>
+          <span>© {new Date().getFullYear()} Laneway Education · Fitzroy St Campus, St Kilda</span>
           <span>Demo environment: all people and data shown are fictional.</span>
         </div>
       </footer>

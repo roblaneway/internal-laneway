@@ -3,7 +3,7 @@ import { deliveringTrainerId, isUncovered } from '@/components/roster/ShiftListI
 import type { Profile, Shift, TrainerBilling } from '@/lib/types'
 
 /** Who trainers invoice. */
-export const BILL_TO = { name: 'Laneway Education', address: 'Melbourne CBD campus, VIC' }
+export const BILL_TO = { name: 'Laneway Education', address: 'Level 3/201 Fitzroy St, St Kilda VIC 3182' }
 
 /** Invoices cover two roster weeks (a fortnight), Monday to Sunday. */
 export const INVOICE_DAYS = 14

@@ -152,7 +152,7 @@ async function as(email: string, password = PASSWORD) {
   const day = shifts.find((x: any) => x.class_id === CLASS(1) && x.status !== 'cancelled')
   const overlap = await a.post('/shifts', { trainer_id: day.trainer_id, class_id: CLASS(4), date: day.date, start_time: '10:00', end_time: '12:00' })
   check('overlapping shift is blocked', overlap.status === 409 && overlap.data.code === '23P01', overlap.data?.error)
-  const ok = await a.post('/shifts', { trainer_id: day.trainer_id, class_id: CLASS(4), date: day.date, start_time: '15:00', end_time: '16:00' })
+  const ok = await a.post('/shifts', { trainer_id: day.trainer_id, class_id: CLASS(4), date: day.date, start_time: day.end_time, end_time: '18:00' })
   check('back-to-back shift (starts as another ends) is allowed', ok.status === 201, ok.data?.error)
   if (ok.status === 201) await a.del(`/shifts/${ok.data.id}`)
 

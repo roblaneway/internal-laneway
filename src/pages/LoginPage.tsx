@@ -63,7 +63,7 @@ export function LoginPage() {
       <main className="flex flex-1 items-center">
         <div className="mx-auto grid w-full max-w-6xl gap-10 px-4 py-10 lg:grid-cols-[1.1fr_1fr] lg:items-center">
           <section className="hidden lg:block">
-            <p className="font-heading text-sm font-semibold tracking-[0.25em] text-primary uppercase">Melbourne CBD · Online</p>
+            <p className="font-heading text-sm font-semibold tracking-[0.25em] text-primary uppercase">St Kilda · Online</p>
             <h1 className="mt-3 font-heading text-6xl leading-[0.95] font-bold text-foreground uppercase">
               Educational experiences
               <br />
