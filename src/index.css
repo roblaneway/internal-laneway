@@ -127,3 +127,13 @@
   content: attr(data-placeholder);
   @apply pointer-events-none float-left h-0 text-muted-foreground;
 }
+
+/* Printing (invoices): plain white page with sensible margins. */
+@media print {
+  @page {
+    margin: 15mm;
+  }
+  body {
+    background: #fff;
+  }
+}

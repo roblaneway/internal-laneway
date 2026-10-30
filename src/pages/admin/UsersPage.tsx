@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Loader2, Plus, Search, Trash2, Users } from 'lucide-react'
+import { Loader2, Plus, ReceiptText, Search, Trash2, Users } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -23,6 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { EmptyState, ErrorState } from '@/components/EmptyState'
 import { ListSkeleton } from '@/components/ListSkeleton'
 import { PageHeader } from '@/components/PageHeader'
+import { BillingDialog } from '@/components/roster/BillingDialog'
 import { initials } from '@/components/layout/AppShell'
 import { keys, useProfiles } from '@/hooks/use-data'
 import { api } from '@/lib/api'
@@ -38,6 +39,7 @@ export function UsersPage() {
   const profiles = useProfiles()
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState<Role | 'any'>('any')
+  const [billingFor, setBillingFor] = useState<Profile | null>(null)
 
   const updateRole = useMutation({
     mutationFn: ({ user, role }: { user: Profile; role: Role }) => api.patch(`/profiles/${user.id}`, { role }),
@@ -129,6 +131,11 @@ export function UsersPage() {
                   ))}
                 </SelectContent>
               </Select>
+              {p.role === 'trainer' && (
+                <Button variant="ghost" size="icon" onClick={() => setBillingFor(p)} aria-label={`Invoice details and rate for ${p.full_name}`} title="Invoice details and rate">
+                  <ReceiptText className="size-4" />
+                </Button>
+              )}
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <Button variant="ghost" size="icon" disabled={p.id === me.id} aria-label={`Delete ${p.full_name}`}>
@@ -152,6 +159,8 @@ export function UsersPage() {
           ))}
         </Card>
       )}
+
+      {billingFor && <BillingDialog trainer={billingFor} canEditRate open onOpenChange={(open) => !open && setBillingFor(null)} />}
     </>
   )
 }

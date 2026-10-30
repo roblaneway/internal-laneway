@@ -37,7 +37,8 @@ The other 4 trainers and 39 students follow the pattern `first.last@example.com`
 | `npm run build:vercel` | Build, migrate and package for Vercel (see below) |
 | `npm run db:migrate` | Apply pending SQL migrations from `db/migrations` |
 | `npm run db:seed` / `db:reset` | Load the demo data / drop everything, migrate and seed |
-| `npm run test:rls` | 28 access-control checks through the API (run on fresh seed data) |
+| `npm run test:rls` | 36 access-control checks through the API (run on fresh seed data) |
+| `npm run user:password -- <email>` | Set a user's password from the terminal (hidden input, stored as a bcrypt hash) |
 
 ## Deploying for free
 
@@ -130,6 +131,13 @@ and UI only mirror it.
   connection while anyone is online and forwards each event to that user's browser tabs over
   server-sent events (`/api/notifications/stream`). With nobody online the connection closes, so
   Neon can scale to zero.
+- **Month view and invoices:** the roster's Month tab shows a calendar. Selecting two consecutive
+  weeks and pressing **Generate invoice** opens a printable invoice (Print / Save as PDF) listing the
+  trainer's delivered sessions for that fortnight: cancelled sessions are left out, and covered
+  sessions go to the cover trainer. Amounts use the trainer's hourly rate, with 10% GST for
+  GST-registered trainers. Rates and invoice details (ABN, address, bank account) live in
+  `trainer_billing`, which only the trainer and admins can read. Trainers edit their own details;
+  only admins set rates (Users & roles → the receipt icon).
 - **Term length:** content plans cover a 10-week term. To change it, update `TERM_WEEKS` in
   `src/lib/dates.ts` and the `content_plans_week_number_check` constraint (with a new migration).
 - **Duplicate plan:** `duplicate_content_plan()` runs with the caller's permissions, so RLS decides

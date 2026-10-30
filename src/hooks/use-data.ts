@@ -11,6 +11,7 @@ import type {
   Profile,
   RosterConflict,
   Shift,
+  TrainerBilling,
 } from '@/lib/types'
 
 // Query keys are shared so mutations can invalidate them.
@@ -27,6 +28,7 @@ export const keys = {
   notifications: ['notifications'] as const,
   plans: (classId: string) => ['plans', classId] as const,
   allPlans: ['plans'] as const,
+  billing: (trainerId: string) => ['billing', trainerId] as const,
 }
 
 export function useCourses() {
@@ -97,10 +99,20 @@ export function useProfileMap(): Map<string, Profile> {
   return useMemo(() => new Map((data ?? []).map((p) => [p.id, p])), [data])
 }
 
-export function useShifts(from: string, to: string) {
+export function useShifts(from: string, to: string, enabled = true) {
   return useQuery({
     queryKey: keys.shifts(from, to),
+    enabled,
     queryFn: () => api.get<Shift[]>('/shifts', { from, to }),
+  })
+}
+
+/** A trainer's invoice details (RLS: the trainer themselves or an admin), or null. */
+export function useTrainerBilling(trainerId: string | undefined) {
+  return useQuery({
+    queryKey: keys.billing(trainerId ?? ''),
+    enabled: Boolean(trainerId),
+    queryFn: () => api.get<TrainerBilling | null>(`/trainer-billing/${trainerId}`),
   })
 }
 

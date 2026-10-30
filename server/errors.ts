@@ -38,6 +38,11 @@ const MESSAGE_BY_CONSTRAINT: Record<string, string> = {
   roster_shifts_time_order: 'The end time must be after the start time',
   roster_shifts_cover_differs: 'The cover trainer must be different from the rostered trainer',
   announcements_target: 'Choose who the announcement is for',
+  trainer_billing_rate_check: "The hourly rate can't be negative",
+  trainer_billing_abn_check: 'An ABN has 11 digits',
+  trainer_billing_bsb_check: 'A BSB has 6 digits',
+  trainer_billing_account_check: 'An account number has 4 to 10 digits',
+  trainer_billing_trainer_id_fkey: 'That trainer no longer exists',
 }
 
 interface PgError {

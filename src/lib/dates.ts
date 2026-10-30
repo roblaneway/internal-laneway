@@ -68,6 +68,20 @@ export function diffDays(a: string, b: string): number {
   return Math.round((toUTCDate(a).getTime() - toUTCDate(b).getTime()) / 86_400_000)
 }
 
+/** Month as YYYY-MM, moved by `months` (negative goes back). */
+export function addMonths(month: string, months: number): string {
+  const [y, m] = month.split('-').map(Number)
+  const d = new Date(Date.UTC(y, m - 1 + months, 1))
+  return d.toISOString().slice(0, 7)
+}
+
+const monthFormatter = new Intl.DateTimeFormat('en-AU', { month: 'long', year: 'numeric', timeZone: 'UTC' })
+
+/** 2026-10 → October 2026 */
+export function formatMonth(month: string): string {
+  return monthFormatter.format(toUTCDate(`${month}-01`))
+}
+
 /** 26/10/2026 */
 export function formatDate(iso: string | null | undefined): string {
   if (!iso) return '—'

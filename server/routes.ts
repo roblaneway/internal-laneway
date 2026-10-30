@@ -244,3 +244,41 @@ api.post('/content-plans/duplicate', async (c) => {
   )
   return c.json({ count })
 })
+
+// --- Trainer invoice details -------------------------------------------------
+
+const BILLING_COLUMNS = [
+  'hourly_rate',
+  'business_name',
+  'abn',
+  'gst_registered',
+  'address',
+  'phone',
+  'bank_account_name',
+  'bank_bsb',
+  'bank_account_number',
+] as const
+
+/** A trainer's invoice details, or null if none are saved yet (or RLS hides them). */
+api.get('/trainer-billing/:trainerId', async (c) => {
+  const [row] = await run(c, (sql) => sql('select * from public.trainer_billing where trainer_id = $1', [c.req.param('trainerId')]))
+  return c.json(row ?? null)
+})
+
+/** Create or update a trainer's invoice details. Only admins may change the hourly rate (trigger). */
+api.put('/trainer-billing/:trainerId', async (c) => {
+  const data = pick(await body(c), BILLING_COLUMNS)
+  const cols = Object.keys(data)
+  const values = [c.req.param('trainerId'), ...Object.values(data)]
+  const insertCols = ['trainer_id', ...cols].join(', ')
+  const params = values.map((_, i) => `$${i + 1}`).join(', ')
+  const updates = cols.length ? cols.map((col) => `${col} = excluded.${col}`).join(', ') : 'trainer_id = excluded.trainer_id'
+  const [row] = await run(c, (sql) =>
+    sql(
+      `insert into public.trainer_billing (${insertCols}) values (${params})
+       on conflict (trainer_id) do update set ${updates} returning *`,
+      values,
+    ),
+  )
+  return c.json(found(row))
+})

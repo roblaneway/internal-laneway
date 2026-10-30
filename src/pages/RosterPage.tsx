@@ -7,6 +7,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { EmptyState, ErrorState } from '@/components/EmptyState'
 import { PageHeader } from '@/components/PageHeader'
 import { StatusBadge } from '@/components/StatusBadge'
+import { MonthRoster, RangeTabs } from '@/components/roster/MonthRoster'
 import { ShiftDialog, type ShiftDraft } from '@/components/roster/ShiftDialog'
 import { ShiftListItem, deliveringTrainerId, isUncovered } from '@/components/roster/ShiftListItem'
 import { useClasses, useProfileMap, useProfiles, useRosterConflicts, useShifts } from '@/hooks/use-data'
@@ -24,6 +25,11 @@ interface Row {
 }
 
 export function RosterPage() {
+  const [params] = useSearchParams()
+  return params.get('range') === 'month' ? <MonthRoster /> : <WeekRoster />
+}
+
+function WeekRoster() {
   const profile = useProfile()
   const isAdmin = profile.role === 'admin'
   const [params, setParams] = useSearchParams()
@@ -81,11 +87,14 @@ export function RosterPage() {
         title={isAdmin ? 'Trainer roster' : 'My roster'}
         description={isAdmin ? 'Plan shifts, arrange cover and resolve overlaps.' : 'Your shifts and the classes you are covering.'}
         actions={
-          isAdmin && (
-            <Button onClick={() => setDialog({ draft: { date: weekStart } })}>
-              <Plus className="size-4" /> New shift
-            </Button>
-          )
+          <>
+            <RangeTabs range="week" />
+            {isAdmin && (
+              <Button onClick={() => setDialog({ draft: { date: weekStart } })}>
+                <Plus className="size-4" /> New shift
+              </Button>
+            )}
+          </>
         }
       />
 

@@ -29,6 +29,7 @@ function client(cookie = '') {
     get: (path: string, query?: Record<string, string>) => call('GET', query ? `${path}?${new URLSearchParams(query)}` : path),
     post: (path: string, body: unknown = {}) => call('POST', path, body),
     patch: (path: string, body: unknown) => call('PATCH', path, body),
+    put: (path: string, body: unknown) => call('PUT', path, body),
     del: (path: string) => call('DELETE', path),
   }
 }
@@ -116,6 +117,31 @@ async function as(email: string, password = PASSWORD) {
     check('students outside the class were not notified', none === 0, `${none} notifications`)
     await t.del(`/announcements/${own.data.id}`)
   }
+}
+
+// Trainer invoice details (rates and bank details are private to the trainer and admins)
+{
+  const marcus = await as('trainer@example.com')
+  const aiko = await as('aiko.tanaka@example.com')
+  const student = await as('student@example.com')
+  const admin = await as('admin@example.com')
+  const own = await marcus.get(`/trainer-billing/${marcus.id}`)
+  check('trainer reads own invoice details', own.status === 200 && own.data?.hourly_rate === '65.00', `rate ${own.data?.hourly_rate}`)
+  const peek = await aiko.get(`/trainer-billing/${marcus.id}`)
+  check("trainer cannot read another trainer's details", peek.status === 200 && peek.data === null)
+  const studentPeek = await student.get(`/trainer-billing/${marcus.id}`)
+  check("student cannot read a trainer's details", studentPeek.status === 200 && studentPeek.data === null)
+  const save = await aiko.put(`/trainer-billing/${aiko.id}`, { abn: '98765432109', gst_registered: true })
+  check('trainer can save own details', save.status === 200, save.data?.error)
+  const rate = await aiko.put(`/trainer-billing/${aiko.id}`, { hourly_rate: 200 })
+  check('trainer cannot set own hourly rate', rate.status === 403, rate.data?.error)
+  const other = await aiko.put(`/trainer-billing/${marcus.id}`, { phone: '0411 111 111' })
+  check("trainer cannot edit another trainer's details", other.status === 403, other.data?.error)
+  const badAbn = await aiko.put(`/trainer-billing/${aiko.id}`, { abn: '123' })
+  check('invalid ABN is rejected', badAbn.status === 400, badAbn.data?.error)
+  const adminRate = await admin.put(`/trainer-billing/${aiko.id}`, { hourly_rate: 70 })
+  check('admin can set a hourly rate', adminRate.status === 200 && adminRate.data?.hourly_rate === '70.00', adminRate.data?.error)
+  await pool.query('delete from public.trainer_billing where trainer_id = $1', [aiko.id])
 }
 
 // Admin

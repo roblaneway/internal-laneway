@@ -167,6 +167,15 @@ cross join lateral (
 ) n;
 
 -- ---------------------------------------------------------------------------
+-- Invoice details for the demo trainer login (fictional ABN and bank account)
+-- ---------------------------------------------------------------------------
+insert into public.trainer_billing
+  (trainer_id, hourly_rate, abn, gst_registered, address, phone, bank_account_name, bank_bsb, bank_account_number)
+values
+  ('b0000000-0000-4000-8000-000000000001', 65.00, '12345678901', false, '1 Example Lane, Melbourne VIC 3000', '0400 000 000',
+   'Marcus Webb', '123456', '12345678');
+
+-- ---------------------------------------------------------------------------
 -- Announcements (the trigger creates student notifications for each)
 -- ---------------------------------------------------------------------------
 insert into public.announcements (title, body, audience, target_id, author_id, pinned, published_at)

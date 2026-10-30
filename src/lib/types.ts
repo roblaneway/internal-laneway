@@ -89,6 +89,21 @@ export interface ContentPlan {
   updated_at: string
 }
 
+/** A trainer's invoice details. Money comes back from Postgres numeric as a string. */
+export interface TrainerBilling {
+  trainer_id: string
+  hourly_rate: string | null
+  business_name: string | null
+  abn: string | null
+  gst_registered: boolean
+  address: string | null
+  phone: string | null
+  bank_account_name: string | null
+  bank_bsb: string | null
+  bank_account_number: string | null
+  updated_at: string
+}
+
 export interface RosterConflict {
   shift_id: string
   other_shift_id: string

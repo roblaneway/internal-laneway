@@ -129,9 +129,9 @@ export function AppShell() {
   useRealtimeNotifications()
 
   return (
-    <div className="flex min-h-svh flex-col bg-background">
-      <div className="h-1 bg-primary" aria-hidden />
-      <header className="sticky top-0 z-30 border-b bg-card/95 backdrop-blur">
+    <div className="flex min-h-svh flex-col bg-background print:min-h-0 print:bg-white">
+      <div className="h-1 bg-primary print:hidden" aria-hidden />
+      <header className="sticky top-0 z-30 border-b print:hidden bg-card/95 backdrop-blur">
         <div className="flex h-16 items-center gap-3 px-4 lg:px-6">
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
             <SheetTrigger asChild>
@@ -196,10 +196,10 @@ export function AppShell() {
       </header>
 
       <div className="flex flex-1">
-        <aside className="sticky top-17 hidden h-[calc(100svh-4.25rem)] w-60 shrink-0 overflow-y-auto border-r bg-sidebar lg:block">
+        <aside className="sticky top-17 hidden h-[calc(100svh-4.25rem)] w-60 shrink-0 overflow-y-auto border-r bg-sidebar lg:block print:hidden">
           <SidebarNav role={profile.role} />
         </aside>
-        <main className="min-w-0 flex-1 px-4 py-6 lg:px-8 lg:py-8">
+        <main className="min-w-0 flex-1 px-4 py-6 lg:px-8 lg:py-8 print:p-0">
           <div className="mx-auto max-w-7xl">
             <Suspense fallback={<Skeleton className="h-96 w-full" />}>
               <Outlet />
@@ -208,7 +208,7 @@ export function AppShell() {
         </main>
       </div>
 
-      <footer className="border-t bg-card px-4 py-4 text-xs text-muted-foreground lg:px-8">
+      <footer className="border-t bg-card print:hidden px-4 py-4 text-xs text-muted-foreground lg:px-8">
         <div className="mx-auto flex max-w-7xl flex-col gap-1 sm:flex-row sm:justify-between">
           <span>© {new Date().getFullYear()} Laneway Education · Melbourne CBD campus</span>
           <span>Demo environment: all people and data shown are fictional.</span>
