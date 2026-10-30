@@ -17,6 +17,7 @@
     "db:migrate": "node --env-file-if-exists=.env server/migrate.ts migrate",
     "db:seed": "node --env-file-if-exists=.env server/migrate.ts seed",
     "db:reset": "node --env-file-if-exists=.env server/migrate.ts reset",
+    "user:password": "node --env-file-if-exists=.env scripts/set-password.ts",
     "test:rls": "node --env-file-if-exists=.env scripts/rls-check.ts"
   },
   "dependencies": {
