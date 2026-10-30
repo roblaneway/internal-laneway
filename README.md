@@ -37,7 +37,7 @@ The other 4 trainers and 39 students follow the pattern `first.last@example.com`
 | `npm run build:vercel` | Build, migrate and package for Vercel (see below) |
 | `npm run db:migrate` | Apply pending SQL migrations from `db/migrations` |
 | `npm run db:seed` / `db:reset` | Load the demo data / drop everything, migrate and seed |
-| `npm run test:rls` | 46 access-control checks through the API (run on fresh seed data) |
+| `npm run test:rls` | 58 access-control checks through the API (run on fresh seed data) |
 | `npm run user:password -- <email>` | Set a user's password from the terminal (hidden input, stored as a bcrypt hash) |
 
 ## Deploying for free
@@ -48,6 +48,25 @@ into an empty database.
 
 **Environment variables:** `DATABASE_URL` (required), `JWT_SECRET` (required in production, a long
 random string), `PORT` (set by most hosts), `SEED_IF_EMPTY`, `MIGRATE_ON_START` (default on).
+For email invites: `SMTP_USER` and `SMTP_PASS` (see **Email invites** below), and optionally
+`MAIL_FROM`, `SMTP_HOST`/`SMTP_PORT` (default Gmail, 465) and `APP_URL` (the sign-in link's base,
+defaults to the site the admin is using).
+
+### Email invites (free with Gmail)
+
+Admins invite people from **Users & roles → Invite user** (or re-send with the envelope icon). The
+person gets an email with a temporary password valid for 7 days; when they first sign in they must
+choose their own password before anything else works (the API enforces it). Anyone can change their
+password later from the account menu. To send through Gmail (free, about 500 emails a day):
+
+1. Turn on 2-Step Verification for the Gmail account, then create an **App password** at
+   <https://myaccount.google.com/apppasswords>.
+2. Set `SMTP_USER` to the Gmail address and `SMTP_PASS` to the 16-character App password (in
+   Vercel: Settings → Environment Variables, then redeploy). Optionally set
+   `MAIL_FROM="Laneway Education <you@gmail.com>"`.
+
+Without these, development prints invite emails in the API's console instead of sending them, and
+production shows an error rather than creating an account nobody can sign in to.
 
 ### Vercel + Neon
 
@@ -62,7 +81,7 @@ frontend, applies migrations, seeds an empty database and writes Vercel's Build 
    This sets `DATABASE_URL` (pooled, used by the API) and `DATABASE_URL_UNPOOLED` (direct, used
    for migrations).
 3. Add environment variables `JWT_SECRET` (a long random string, e.g. from `openssl rand -hex 32`)
-   and `DATABASE_POOL_SIZE=3`, then deploy.
+   and `DATABASE_POOL_SIZE=3`, plus `SMTP_USER`/`SMTP_PASS` for email invites, then deploy.
 
 Vercel's free Hobby plan is for personal, non-commercial use. Preview deployments run the
 migrations too, against whichever database their `DATABASE_URL` points to.

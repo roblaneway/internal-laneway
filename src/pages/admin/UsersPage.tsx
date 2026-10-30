@@ -1,8 +1,9 @@
 import { useState, type FormEvent } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Loader2, Plus, ReceiptText, Search, Trash2, Users } from 'lucide-react'
+import { Loader2, Mail, ReceiptText, Search, Send, Trash2, Users } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import {
@@ -25,7 +26,7 @@ import { ListSkeleton } from '@/components/ListSkeleton'
 import { PageHeader } from '@/components/PageHeader'
 import { BillingDialog } from '@/components/roster/BillingDialog'
 import { initials } from '@/components/layout/AppShell'
-import { keys, useProfiles } from '@/hooks/use-data'
+import { keys, usePendingInvites, useProfiles } from '@/hooks/use-data'
 import { api } from '@/lib/api'
 import { formatTimestampDate } from '@/lib/dates'
 import { useProfile } from '@/auth/AuthProvider'
@@ -40,6 +41,16 @@ export function UsersPage() {
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState<Role | 'any'>('any')
   const [billingFor, setBillingFor] = useState<Profile | null>(null)
+  const pending = usePendingInvites()
+
+  const resend = useMutation({
+    mutationFn: (user: Profile) => api.post<InviteResult>('/invites', { email: user.email }),
+    onSuccess: (_d, user) => {
+      toast.success(`Invite sent to ${user.email}`)
+      queryClient.invalidateQueries({ queryKey: keys.pendingInvites })
+    },
+    onError: (err) => toast.error(err.message),
+  })
 
   const updateRole = useMutation({
     mutationFn: ({ user, role }: { user: Profile; role: Role }) => api.patch(`/profiles/${user.id}`, { role }),
@@ -72,7 +83,7 @@ export function UsersPage() {
       <PageHeader
         title="Users & roles"
         description={`${counts.admin} admin · ${counts.trainer} trainers · ${counts.student} students`}
-        actions={<AddUserDialog />}
+        actions={<InviteUserDialog />}
       />
 
       <div className="mb-4 flex flex-col gap-2 sm:flex-row">
@@ -114,6 +125,13 @@ export function UsersPage() {
                 <p className="truncate text-xs text-muted-foreground">
                   {p.email} · joined {formatTimestampDate(p.created_at)}
                 </p>
+                {pending.data?.has(p.id) && (
+                  <Badge variant="secondary" className="mt-1">
+                    {new Date(pending.data.get(p.id)!) > new Date()
+                      ? `Invite pending · expires ${formatTimestampDate(pending.data.get(p.id))}`
+                      : 'Invite expired'}
+                  </Badge>
+                )}
               </div>
               <Select
                 value={p.role}
@@ -136,6 +154,32 @@ export function UsersPage() {
                   <ReceiptText className="size-4" />
                 </Button>
               )}
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    disabled={p.id === me.id || resend.isPending}
+                    aria-label={`Email ${p.full_name} an invite`}
+                    title="Email an invite with a new temporary password"
+                  >
+                    <Mail className="size-4" />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Email {p.full_name} an invite?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      We'll send {p.email} a new temporary password, valid for 7 days. It replaces their current password, and
+                      they'll choose their own when they sign in.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => resend.mutate(p)}>Send invite</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <Button variant="ghost" size="icon" disabled={p.id === me.id} aria-label={`Delete ${p.full_name}`}>
@@ -165,56 +209,66 @@ export function UsersPage() {
   )
 }
 
-function AddUserDialog() {
+interface InviteResult {
+  profile: Profile
+  created: boolean
+  expires_at: string
+}
+
+/** Invite someone by email: they get a temporary password and choose their own when they sign in. */
+function InviteUserDialog() {
   const queryClient = useQueryClient()
   const [open, setOpen] = useState(false)
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
-  const [role, setRole] = useState<Role>('student')
-  const [password, setPassword] = useState('')
+  const [role, setRole] = useState<Role>('trainer')
 
-  const create = useMutation({
-    mutationFn: () => api.post('/profiles', { full_name: fullName.trim(), email: email.trim(), role, password }),
-    onSuccess: () => {
-      toast.success(`${fullName} added`)
+  const invite = useMutation({
+    mutationFn: () => api.post<InviteResult>('/invites', { full_name: fullName.trim(), email: email.trim(), role }),
+    onSuccess: (result) => {
+      toast.success(
+        result.created ? `Invite sent to ${result.profile.email}` : `${result.profile.full_name} already had an account: a new invite was sent`,
+      )
       queryClient.invalidateQueries({ queryKey: keys.profiles })
+      queryClient.invalidateQueries({ queryKey: keys.pendingInvites })
       setOpen(false)
       setFullName('')
       setEmail('')
-      setPassword('')
-      setRole('student')
+      setRole('trainer')
     },
     onError: (err) => toast.error(err.message),
   })
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault()
-    create.mutate()
+    invite.mutate()
   }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button>
-          <Plus className="size-4" /> Add user
+          <Send className="size-4" /> Invite user
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <form onSubmit={onSubmit} className="contents">
           <DialogHeader>
-            <DialogTitle>Add a user</DialogTitle>
-            <DialogDescription>They can sign in straight away with the temporary password.</DialogDescription>
+            <DialogTitle>Invite a user</DialogTitle>
+            <DialogDescription>
+              We'll email them a temporary password, valid for 7 days. They choose their own password when they first sign in.
+            </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4">
             <div className="space-y-1.5">
               <Label htmlFor="u-name">Full name</Label>
               <Input id="u-name" required value={fullName} onChange={(e) => setFullName(e.target.value)} />
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="u-email">Email</Label>
-              <Input id="u-email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-[1fr_9rem]">
+              <div className="space-y-1.5">
+                <Label htmlFor="u-email">Email</Label>
+                <Input id="u-email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="first.last@laneway.edu.au" />
+              </div>
               <div className="space-y-1.5">
                 <Label>Role</Label>
                 <Select value={role} onValueChange={(v) => setRole(v as Role)}>
@@ -230,18 +284,14 @@ function AddUserDialog() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="u-pass">Temporary password</Label>
-                <Input id="u-pass" type="text" minLength={8} required value={password} onChange={(e) => setPassword(e.target.value)} />
-              </div>
             </div>
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={create.isPending}>
-              {create.isPending && <Loader2 className="size-4 animate-spin" />} Add user
+            <Button type="submit" disabled={invite.isPending}>
+              {invite.isPending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />} Send invite
             </Button>
           </DialogFooter>
         </form>

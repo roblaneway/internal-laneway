@@ -175,6 +175,57 @@ async function as(email: string, password = PASSWORD) {
   }
 }
 
+// Email invites: temporary passwords expire and must be replaced before using the API
+{
+  const admin = await as('admin@example.com')
+  const marcus = await as('trainer@example.com')
+  const email = 'invite.test@example.com'
+  const byTrainer = await marcus.post('/invites', { email, full_name: 'Invite Test', role: 'trainer' })
+  check('trainer cannot send invites', byTrainer.status === 403, byTrainer.data?.error)
+  const invited = await admin.post('/invites', { email, full_name: 'Invite Test', role: 'trainer' })
+  check('admin invites a new user', invited.status === 201 && invited.data?.created === true, invited.data?.error)
+  const pendingList = await admin.get('/invites/pending')
+  check('invite shows as pending', pendingList.data?.some((r: any) => r.user_id === invited.data?.profile?.id))
+  const trainerPeek = await marcus.get('/invites/pending')
+  check('trainer cannot list pending invites', trainerPeek.status === 403, `status ${trainerPeek.status}`)
+  const self = await admin.post('/invites', { email: 'admin@example.com' })
+  check("admin can't re-invite themselves", self.status === 400, self.data?.error)
+
+  // The emailed password is random, so give the invitee a known temporary one the same way.
+  const temp = 'Temp-Pass-1234'
+  await withUser(admin.id, (sql) => sql('select * from app.invite_user($1, null, null, $2)', [email, temp]))
+  const login = await app.request('/api/auth/login', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email, password: temp }),
+  })
+  const loginBody = (await login.json()) as { mustChangePassword?: boolean }
+  check('temporary password signs in and asks for a new one', login.status === 200 && loginBody.mustChangePassword === true)
+  const tempClient = client(login.headers.get('set-cookie')!.split(';')[0])
+  const blocked = await tempClient.get('/profiles')
+  check('API is blocked until the password is changed', blocked.status === 403 && blocked.data?.code === 'PASSWORD_CHANGE_REQUIRED', blocked.data?.error)
+  const changeWith = (current: string, next: string) =>
+    app.request('/api/auth/change-password', {
+      method: 'POST',
+      headers: { cookie: login.headers.get('set-cookie')!.split(';')[0], 'content-type': 'application/json' },
+      body: JSON.stringify({ current_password: current, new_password: next }),
+    })
+  const wrong = await changeWith('not-the-password', 'NewPass-5678')
+  check('changing password needs the current one', wrong.status === 400)
+  const changed = await changeWith(temp, 'NewPass-5678')
+  check('temporary password can be replaced', changed.status === 200)
+  const after = await client(changed.headers.get('set-cookie')!.split(';')[0]).get('/profiles')
+  check('API works after the password change', after.status === 200, `status ${after.status}`)
+  const signIn = await as(email, 'NewPass-5678').then(() => true, () => false)
+  check('new password signs in', signIn)
+
+  await withUser(admin.id, (sql) => sql('select * from app.invite_user($1, null, null, $2)', [email, temp]))
+  await pool.query(`update app.credentials set expires_at = now() - interval '1 minute' where user_id = $1`, [invited.data.profile.id])
+  const expired = await as(email, temp).then(() => true, () => false)
+  check('expired temporary password is rejected', !expired)
+  await pool.query('delete from public.profiles where id = $1', [invited.data.profile.id])
+}
+
 // Admin
 {
   const a = await as('admin@example.com')

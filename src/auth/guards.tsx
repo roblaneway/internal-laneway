@@ -17,11 +17,13 @@ function FullPageLoading() {
 }
 
 export function RequireAuth({ children }: { children?: ReactNode }) {
-  const { profile, loading } = useAuth()
+  const { profile, loading, mustChangePassword } = useAuth()
   const location = useLocation()
 
   if (loading) return <FullPageLoading />
   if (!profile) return <Navigate to="/login" replace state={{ from: location.pathname }} />
+  // The API refuses everything else until a temporary password is replaced.
+  if (mustChangePassword && location.pathname !== '/change-password') return <Navigate to="/change-password" replace />
   return children ?? <Outlet />
 }
 

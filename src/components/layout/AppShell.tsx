@@ -1,11 +1,12 @@
 import { Suspense, useState } from 'react'
-import { NavLink, Outlet } from 'react-router-dom'
+import { Link, NavLink, Outlet } from 'react-router-dom'
 import {
   BookOpen,
   CalendarDays,
   ClipboardCheck,
   ClipboardList,
   GraduationCap,
+  KeyRound,
   LayoutDashboard,
   LogOut,
   Megaphone,
@@ -189,6 +190,11 @@ export function AppShell() {
                   <span className="block truncate text-xs font-normal text-muted-foreground">{profile.email}</span>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link to="/change-password">
+                    <KeyRound className="size-4" /> Change password
+                  </Link>
+                </DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => signOut()}>
                   <LogOut className="size-4" /> Sign out
                 </DropdownMenuItem>

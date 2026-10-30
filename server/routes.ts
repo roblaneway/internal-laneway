@@ -1,7 +1,9 @@
 import { Hono, type Context } from 'hono'
 import type { AuthEnv } from './auth.ts'
 import { deleteRow, insertRow, pick, updateRow, withUser, type Row, type Sql } from './db.ts'
+import { randomInt } from 'node:crypto'
 import { HttpError, notFound } from './errors.ts'
+import { inviteMail, sendMail } from './mail.ts'
 import { notificationStream } from './realtime.ts'
 
 // Every route runs inside withUser(), so row-level security in the database is
@@ -61,6 +63,41 @@ api.post('/profiles', async (c) => {
   })
   return c.json(profile, 201)
 })
+
+// --- Email invites -----------------------------------------------------------
+
+// No 0/O or 1/l/I, so the password is easy to read from an email.
+const PASSWORD_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'
+const temporaryPassword = () =>
+  Array.from({ length: 3 }, () => Array.from({ length: 4 }, () => PASSWORD_ALPHABET[randomInt(PASSWORD_ALPHABET.length)]).join('')).join('-')
+
+/**
+ * Invite a new user, or re-invite an existing one, by email with a temporary password.
+ * app.invite_user() checks the caller is an admin. The email is sent before the
+ * transaction commits, so a failed send leaves the account unchanged.
+ */
+api.post('/invites', async (c) => {
+  const { email, full_name, role } = await body(c)
+  if (!email) throw new HttpError(400, 'Email is required')
+  const password = temporaryPassword()
+  const loginUrl = `${process.env.APP_URL || c.req.header('origin') || new URL(c.req.url).origin}/login`
+  const result = await run(c, async (sql) => {
+    const [invite] = await sql<{ user_id: string; created: boolean }>('select * from app.invite_user($1, $2, $3, $4)', [
+      email,
+      full_name ?? null,
+      role ?? null,
+      password,
+    ])
+    const [profile] = await sql('select * from public.profiles where id = $1', [invite.user_id])
+    const [{ expires_at }] = await sql<{ expires_at: Date }>('select expires_at from app.pending_invites() where user_id = $1', [invite.user_id])
+    await sendMail(inviteMail({ to: profile.email, name: profile.full_name, role: profile.role, password, loginUrl, expiresAt: expires_at }))
+    return { profile, created: invite.created, expires_at }
+  })
+  return c.json(result, result.created ? 201 : 200)
+})
+
+/** Users who haven't replaced their temporary password yet (admins only). */
+api.get('/invites/pending', async (c) => c.json(await run(c, (sql) => sql('select * from app.pending_invites()'))))
 
 api.delete('/profiles/:id', async (c) => {
   if (c.req.param('id') === c.get('userId')) throw new HttpError(400, "You can't delete your own account")

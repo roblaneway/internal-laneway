@@ -46,7 +46,8 @@ try {
   const { rowCount } = await client.query(
     `insert into app.credentials (user_id, password_hash)
      select id, extensions.crypt($2, extensions.gen_salt('bf', 10)) from public.profiles where lower(email) = lower($1)
-     on conflict (user_id) do update set password_hash = excluded.password_hash, updated_at = now()`,
+     on conflict (user_id) do update
+       set password_hash = excluded.password_hash, must_change_password = false, expires_at = null, updated_at = now()`,
     [email, password],
   )
   if (!rowCount) {

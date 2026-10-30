@@ -4,6 +4,7 @@ import { RequireAuth, RequireRole } from '@/auth/guards'
 import { AppShell } from '@/components/layout/AppShell'
 import { LoginPage } from '@/pages/LoginPage'
 import { DashboardPage } from '@/pages/DashboardPage'
+import { ChangePasswordPage } from '@/pages/ChangePasswordPage'
 
 // Route-level code splitting keeps the editor and admin screens out of the first load.
 const RosterPage = lazy(() => import('@/pages/RosterPage').then((m) => ({ default: m.RosterPage })))
@@ -24,6 +25,7 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route element={<RequireAuth />}>
+        <Route path="/change-password" element={<ChangePasswordPage />} />
         <Route element={<AppShell />}>
           <Route index element={<DashboardPage />} />
           <Route path="announcements" element={<AnnouncementsPage />} />

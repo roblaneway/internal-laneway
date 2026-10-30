@@ -31,6 +31,7 @@ export const keys = {
   allPlans: ['plans'] as const,
   billing: (trainerId: string) => ['billing', trainerId] as const,
   allAssessments: ['marked-assessments'] as const,
+  pendingInvites: ['invites', 'pending'] as const,
   assessments: (from: string, to: string, trainerId: string) => ['marked-assessments', from, to, trainerId] as const,
 }
 
@@ -125,6 +126,18 @@ export function useMarkedAssessments(from: string, to: string, trainerId = '') {
     queryKey: keys.assessments(from, to, trainerId),
     queryFn: () =>
       api.get<MarkedAssessment[]>('/marked-assessments', { from, to, ...(trainerId && { trainer_id: trainerId }) }),
+  })
+}
+
+/** Users still holding an emailed temporary password, by id → expiry (admins only). */
+export function usePendingInvites(enabled = true) {
+  return useQuery({
+    queryKey: keys.pendingInvites,
+    enabled,
+    queryFn: async () => {
+      const rows = await api.get<{ user_id: string; expires_at: string }[]>('/invites/pending')
+      return new Map(rows.map((r) => [r.user_id, r.expires_at]))
+    },
   })
 }
 

@@ -7,14 +7,17 @@ interface AuthContextValue {
   profile: Profile | null
   /** True until the initial session check has finished. */
   loading: boolean
+  /** Signed in with a temporary password that must be replaced before using the portal. */
+  mustChangePassword: boolean
   signIn: (email: string, password: string) => Promise<void>
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>
   signOut: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
 const SESSION_KEY = ['session'] as const
-type Session = { profile: Profile | null }
+type Session = { profile: Profile | null; mustChangePassword?: boolean }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient()
@@ -45,8 +48,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value: AuthContextValue = {
     profile: session.data?.profile ?? null,
     loading: session.isPending,
+    mustChangePassword: Boolean(session.data?.mustChangePassword),
     signIn: async (email, password) => {
       setSession(await api.post<Session>('/auth/login', { email, password }))
+    },
+    changePassword: async (currentPassword, newPassword) => {
+      const next = await api.post<Session>('/auth/change-password', { current_password: currentPassword, new_password: newPassword })
+      queryClient.setQueryData(SESSION_KEY, next)
     },
     signOut: async () => {
       await api.post('/auth/logout')
