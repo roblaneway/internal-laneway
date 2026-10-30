@@ -1,7 +1,7 @@
 import pg from 'pg'
 import type { Context } from 'hono'
 import { streamSSE } from 'hono/streaming'
-import { databaseUrl } from './db.ts'
+import { directUrl } from './db.ts'
 
 // Database triggers pg_notify() on the 'notifications' channel. One LISTEN
 // connection fans those events out to each user's open browser tabs over SSE.
@@ -29,7 +29,7 @@ function deliver(msg: pg.Notification) {
 function ensureListening() {
   clearTimeout(idleTimer)
   if (listener || connecting) return
-  const client = new pg.Client({ connectionString: databaseUrl })
+  const client = new pg.Client({ connectionString: directUrl })
   const drop = () => {
     if (listener !== client) return
     listener = null

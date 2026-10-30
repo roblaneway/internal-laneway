@@ -1,7 +1,7 @@
 import { readdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import pg from 'pg'
-import { databaseUrl } from './db.ts'
+import { directUrl } from './db.ts'
 
 // Plain-SQL migrations from db/migrations, applied in filename order and
 // recorded in app.schema_migrations. Usage:
@@ -12,10 +12,6 @@ import { databaseUrl } from './db.ts'
 
 const dbDir = path.resolve(import.meta.dirname, '../db')
 const LOCK_ID = 7_302_026 // advisory lock so two app instances don't migrate at once
-
-// Advisory locks and multi-statement files need a direct connection, not a
-// transaction-mode pooler such as Neon's (which sets DATABASE_URL_UNPOOLED).
-const directUrl = process.env.DATABASE_URL_UNPOOLED || databaseUrl
 
 async function connect() {
   const client = new pg.Client({ connectionString: directUrl })

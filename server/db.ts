@@ -5,6 +5,12 @@ pg.types.setTypeParser(pg.types.builtins.DATE, (value) => value)
 
 export const databaseUrl = process.env.DATABASE_URL ?? 'postgres://postgres:postgres@127.0.0.1:5433/laneway'
 
+/**
+ * Direct (unpooled) connection for session-level work: migrations, advisory locks and LISTEN.
+ * Neon sets DATABASE_URL to its transaction-mode pooler and this one to the direct host.
+ */
+export const directUrl = process.env.DATABASE_URL_UNPOOLED || databaseUrl
+
 export const pool = new pg.Pool({ connectionString: databaseUrl, max: Number(process.env.DATABASE_POOL_SIZE ?? 10) })
 
 export type Row = Record<string, any>
