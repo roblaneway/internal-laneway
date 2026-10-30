@@ -37,7 +37,7 @@ The other 4 trainers and 39 students follow the pattern `first.last@example.com`
 | `npm run build:vercel` | Build, migrate and package for Vercel (see below) |
 | `npm run db:migrate` | Apply pending SQL migrations from `db/migrations` |
 | `npm run db:seed` / `db:reset` | Load the demo data / drop everything, migrate and seed |
-| `npm run test:rls` | 36 access-control checks through the API (run on fresh seed data) |
+| `npm run test:rls` | 46 access-control checks through the API (run on fresh seed data) |
 | `npm run user:password -- <email>` | Set a user's password from the terminal (hidden input, stored as a bcrypt hash) |
 
 ## Deploying for free
@@ -132,12 +132,20 @@ and UI only mirror it.
   server-sent events (`/api/notifications/stream`). With nobody online the connection closes, so
   Neon can scale to zero.
 - **Month view and invoices:** the roster's Month tab shows a calendar. Selecting two consecutive
-  weeks and pressing **Generate invoice** opens a printable invoice (Print / Save as PDF) listing the
-  trainer's delivered sessions for that fortnight: cancelled sessions are left out, and covered
-  sessions go to the cover trainer. Amounts use the trainer's hourly rate, with 10% GST for
-  GST-registered trainers. Rates and invoice details (ABN, address, bank account) live in
+  weeks and pressing **Generate invoice** opens the fortnight's invoice in Laneway's template: one
+  line per class (paid hours × hourly rate, with the term weeks), a line for marked assessments, and
+  the total. **Print / Save as PDF** saves it as `Invoice-Laneway-<Month>-<day>-<year>.pdf` (the
+  fortnight's last day), and **Spreadsheet (.xlsx)** downloads the matching invoice spreadsheet: a
+  block per week with each session's content plan topics, then extra activities, with formulas for
+  every total. Cancelled sessions are left out and covered sessions go to the cover trainer. A
+  class's **paid hours per session** and **name on invoices** are set under Classes & enrolments
+  (paid hours default to the rostered time). Rates and invoice details (ABN, address, bank) live in
   `trainer_billing`, which only the trainer and admins can read. Trainers edit their own details;
-  only admins set rates (Users & roles → the receipt icon).
+  only admins set the hourly and per-assessment rates (Users & roles → the receipt icon). GST-
+  registered trainers get 10% GST and a tax invoice.
+- **Assessments:** trainers record the assessments and reassessments they mark (activity, unit,
+  course, term, quantity, date) under **My assessments**. Each entry is paid on the invoice for the
+  fortnight it was marked in. `marked_assessments` is private to the trainer and admins.
 - **Term length:** content plans cover a 10-week term. To change it, update `TERM_WEEKS` in
   `src/lib/dates.ts` and the `content_plans_week_number_check` constraint (with a new migration).
 - **Duplicate plan:** `duplicate_content_plan()` runs with the caller's permissions, so RLS decides

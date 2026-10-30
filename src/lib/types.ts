@@ -32,6 +32,10 @@ export interface ClassRow {
   term: string
   start_date: string
   trainer_id: string | null
+  /** How the class appears on invoices, e.g. "DIPLOMA IT FOUNDATION". */
+  invoice_label: string | null
+  /** Hours paid per session (numeric, as a string), when not the rostered time. */
+  paid_hours: string | null
   created_at: string
 }
 
@@ -98,9 +102,28 @@ export interface TrainerBilling {
   gst_registered: boolean
   address: string | null
   phone: string | null
+  bank_name: string | null
   bank_account_name: string | null
   bank_bsb: string | null
   bank_account_number: string | null
+  assessment_rate: string | null
+  updated_at: string
+}
+
+export type AssessmentKind = 'Assessment' | 'Reassessment'
+
+/** Assessments a trainer marked, billed on the invoice for the fortnight of `marked_on`. */
+export interface MarkedAssessment {
+  id: string
+  trainer_id: string
+  marked_on: string
+  activity: string
+  unit_code: string
+  term: string | null
+  course: string
+  kind: AssessmentKind
+  quantity: number
+  created_at: string
   updated_at: string
 }
 

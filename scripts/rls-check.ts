@@ -141,7 +141,38 @@ async function as(email: string, password = PASSWORD) {
   check('invalid ABN is rejected', badAbn.status === 400, badAbn.data?.error)
   const adminRate = await admin.put(`/trainer-billing/${aiko.id}`, { hourly_rate: 70 })
   check('admin can set a hourly rate', adminRate.status === 200 && adminRate.data?.hourly_rate === '70.00', adminRate.data?.error)
+  const assessmentRate = await aiko.put(`/trainer-billing/${aiko.id}`, { assessment_rate: 50 })
+  check('trainer cannot set own assessment rate', assessmentRate.status === 403, assessmentRate.data?.error)
   await pool.query('delete from public.trainer_billing where trainer_id = $1', [aiko.id])
+}
+
+// Marked assessments (paid on invoices, so private to the trainer and admins)
+{
+  const marcus = await as('trainer@example.com')
+  const aiko = await as('aiko.tanaka@example.com')
+  const student = await as('student@example.com')
+  const admin = await as('admin@example.com')
+  const own = await marcus.get('/marked-assessments', ALL_TIME)
+  check('trainer reads own marked assessments', own.status === 200 && own.data.length === 2, `saw ${own.data?.length}`)
+  const peek = await aiko.get('/marked-assessments', { ...ALL_TIME, trainer_id: marcus.id })
+  check("trainer cannot read another trainer's marked assessments", peek.status === 200 && peek.data.length === 0, `saw ${peek.data?.length}`)
+  const studentPeek = await student.get('/marked-assessments', ALL_TIME)
+  check('student cannot read marked assessments', studentPeek.status === 200 && studentPeek.data.length === 0, `saw ${studentPeek.data?.length}`)
+  const entry = { activity: 'Assessment 1', unit_code: 'ICTWEB522', course: 'DIPLOMA IT', quantity: 3 }
+  const created = await aiko.post('/marked-assessments', entry)
+  check('trainer records own marked assessment', created.status === 201 && created.data?.trainer_id === aiko.id, created.data?.error)
+  const forged = await aiko.post('/marked-assessments', { ...entry, trainer_id: marcus.id })
+  check('trainer cannot record marking for another trainer', forged.status === 403, forged.data?.error)
+  const hijack = await aiko.patch(`/marked-assessments/${own.data[0].id}`, { quantity: 99 })
+  check("trainer cannot edit another trainer's entry", hijack.status === 404, `status ${hijack.status}`)
+  const badQty = await aiko.post('/marked-assessments', { ...entry, quantity: 0 })
+  check('a quantity of 0 is rejected', badQty.status === 400, badQty.data?.error)
+  const all = await admin.get('/marked-assessments', ALL_TIME)
+  check('admin reads everyone’s marked assessments', all.status === 200 && all.data.length === 3, `saw ${all.data?.length}`)
+  if (created.status === 201) {
+    const removed = await aiko.del(`/marked-assessments/${created.data.id}`)
+    check('trainer deletes own entry', removed.status === 204, `status ${removed.status}`)
+  }
 }
 
 // Admin

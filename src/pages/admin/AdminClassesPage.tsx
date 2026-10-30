@@ -154,6 +154,8 @@ function ClassForm({ cls, onDone }: { cls?: ClassWithCourse; onDone: () => void 
   const [term, setTerm] = useState(cls?.term ?? '')
   const [startDate, setStartDate] = useState(cls?.start_date ?? '')
   const [trainerId, setTrainerId] = useState(cls?.trainer_id ?? NONE)
+  const [invoiceLabel, setInvoiceLabel] = useState(cls?.invoice_label ?? '')
+  const [paidHours, setPaidHours] = useState(cls?.paid_hours ?? '')
 
   const save = useMutation({
     mutationFn: async () => {
@@ -165,6 +167,8 @@ function ClassForm({ cls, onDone }: { cls?: ClassWithCourse; onDone: () => void 
         term: term.trim(),
         start_date: startDate,
         trainer_id: trainerId === NONE ? null : trainerId,
+        invoice_label: invoiceLabel.trim() || null,
+        paid_hours: paidHours.trim() || null,
       }
       if (cls) await api.patch(`/classes/${cls.id}`, row)
       else await api.post('/classes', row)
@@ -248,6 +252,26 @@ function ClassForm({ cls, onDone }: { cls?: ClassWithCourse; onDone: () => void 
               ))}
             </SelectContent>
           </Select>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-[1fr_9rem]">
+          <div className="space-y-1.5">
+            <Label htmlFor="cl-invoice">Name on invoices</Label>
+            <Input id="cl-invoice" value={invoiceLabel} onChange={(e) => setInvoiceLabel(e.target.value)} placeholder="DIPLOMA IT FOUNDATION" />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="cl-paid">Paid hours / session</Label>
+            <Input
+              id="cl-paid"
+              type="number"
+              min="0.25"
+              max="24"
+              step="0.25"
+              inputMode="decimal"
+              value={paidHours}
+              onChange={(e) => setPaidHours(e.target.value)}
+              placeholder="Rostered time"
+            />
+          </div>
         </div>
       </div>
       <DialogFooter>

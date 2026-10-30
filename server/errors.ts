@@ -43,6 +43,14 @@ const MESSAGE_BY_CONSTRAINT: Record<string, string> = {
   trainer_billing_bsb_check: 'A BSB has 6 digits',
   trainer_billing_account_check: 'An account number has 4 to 10 digits',
   trainer_billing_trainer_id_fkey: 'That trainer no longer exists',
+  trainer_billing_assessment_rate_check: "The assessment rate can't be negative",
+  classes_paid_hours_check: 'Paid hours must be more than 0 and at most 24',
+  marked_assessments_activity_check: 'Say which assessment was marked',
+  marked_assessments_unit_check: 'Add the unit code',
+  marked_assessments_course_check: 'Add the course',
+  marked_assessments_kind_check: 'Choose assessment or reassessment',
+  marked_assessments_quantity_check: 'The quantity must be between 1 and 500',
+  marked_assessments_trainer_id_fkey: 'That trainer no longer exists',
 }
 
 interface PgError {

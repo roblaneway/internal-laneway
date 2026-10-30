@@ -7,6 +7,7 @@ import type {
   ClassWithCourse,
   ContentPlan,
   Course,
+  MarkedAssessment,
   Notification,
   Profile,
   RosterConflict,
@@ -29,6 +30,8 @@ export const keys = {
   plans: (classId: string) => ['plans', classId] as const,
   allPlans: ['plans'] as const,
   billing: (trainerId: string) => ['billing', trainerId] as const,
+  allAssessments: ['marked-assessments'] as const,
+  assessments: (from: string, to: string, trainerId: string) => ['marked-assessments', from, to, trainerId] as const,
 }
 
 export function useCourses() {
@@ -113,6 +116,15 @@ export function useTrainerBilling(trainerId: string | undefined) {
     queryKey: keys.billing(trainerId ?? ''),
     enabled: Boolean(trainerId),
     queryFn: () => api.get<TrainerBilling | null>(`/trainer-billing/${trainerId}`),
+  })
+}
+
+/** Assessments marked between two dates, for one trainer or (admins, with '') everyone. */
+export function useMarkedAssessments(from: string, to: string, trainerId = '') {
+  return useQuery({
+    queryKey: keys.assessments(from, to, trainerId),
+    queryFn: () =>
+      api.get<MarkedAssessment[]>('/marked-assessments', { from, to, ...(trainerId && { trainer_id: trainerId }) }),
   })
 }
 

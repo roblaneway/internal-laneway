@@ -69,11 +69,11 @@ insert into public.courses (id, code, name) values
 
 -- Week 1 starts Monday 21/09/2026; each class meets one day a week at the
 -- Fitzroy St campus. The demo seed uses fictional lead trainers.
-insert into public.classes (id, course_id, name, room, delivery_mode, term, start_date, trainer_id) values
-  ('e0000000-0000-4000-8000-000000000001', 'd0000000-0000-4000-8000-000000000001', 'Dip IT (Web) Foundation — Tue',  'Fitzroy St, St Kilda · Classroom 3', 'on-campus', 'Term 4 2026', '2026-09-21', 'b0000000-0000-4000-8000-000000000001'),
-  ('e0000000-0000-4000-8000-000000000002', 'd0000000-0000-4000-8000-000000000002', 'Dip IT Cybersecurity — Wed',     'Fitzroy St, St Kilda · Classroom 3', 'on-campus', 'Term 4 2026', '2026-09-21', 'b0000000-0000-4000-8000-000000000004'),
-  ('e0000000-0000-4000-8000-000000000003', 'd0000000-0000-4000-8000-000000000003', 'Dip IT (Web) Experienced — Thu', 'Fitzroy St, St Kilda · Classroom 3', 'on-campus', 'Term 4 2026', '2026-09-21', 'b0000000-0000-4000-8000-000000000002'),
-  ('e0000000-0000-4000-8000-000000000004', 'd0000000-0000-4000-8000-000000000004', 'Adv Dip IT Class A + B — Fri',   'Fitzroy St, St Kilda · Classroom 3', 'on-campus', 'Term 4 2026', '2026-09-21', 'b0000000-0000-4000-8000-000000000003');
+insert into public.classes (id, course_id, name, room, delivery_mode, term, start_date, trainer_id, invoice_label, paid_hours) values
+  ('e0000000-0000-4000-8000-000000000001', 'd0000000-0000-4000-8000-000000000001', 'Dip IT (Web) Foundation — Tue',  'Fitzroy St, St Kilda · Classroom 3', 'on-campus', 'Term 4 2026', '2026-09-21', 'b0000000-0000-4000-8000-000000000001', 'DIPLOMA IT FOUNDATION',        4.5),
+  ('e0000000-0000-4000-8000-000000000002', 'd0000000-0000-4000-8000-000000000002', 'Dip IT Cybersecurity — Wed',     'Fitzroy St, St Kilda · Classroom 3', 'on-campus', 'Term 4 2026', '2026-09-21', 'b0000000-0000-4000-8000-000000000004', 'DIPLOMA IT - CYBERSECURITY',   7.5),
+  ('e0000000-0000-4000-8000-000000000003', 'd0000000-0000-4000-8000-000000000003', 'Dip IT (Web) Experienced — Thu', 'Fitzroy St, St Kilda · Classroom 3', 'on-campus', 'Term 4 2026', '2026-09-21', 'b0000000-0000-4000-8000-000000000002', 'DIPLOMA IT',                   7.5),
+  ('e0000000-0000-4000-8000-000000000004', 'd0000000-0000-4000-8000-000000000004', 'Adv Dip IT Class A + B — Fri',   'Fitzroy St, St Kilda · Classroom 3', 'on-campus', 'Term 4 2026', '2026-09-21', 'b0000000-0000-4000-8000-000000000003', 'ADV. DIPLOMA IT - Class A / B', 7.5);
 
 -- Students 1–10 → class 1, 11–20 → class 2, and so on.
 insert into public.class_enrolments (class_id, student_id)
@@ -170,10 +170,16 @@ cross join lateral (
 -- Invoice details for the demo trainer login (fictional ABN and bank account)
 -- ---------------------------------------------------------------------------
 insert into public.trainer_billing
-  (trainer_id, hourly_rate, abn, gst_registered, address, phone, bank_account_name, bank_bsb, bank_account_number)
+  (trainer_id, hourly_rate, assessment_rate, abn, gst_registered, address, phone,
+   bank_name, bank_account_name, bank_bsb, bank_account_number)
 values
-  ('b0000000-0000-4000-8000-000000000001', 65.00, '12345678901', false, '1 Example Lane, Melbourne VIC 3000', '0400 000 000',
-   'Marcus Webb', '123456', '12345678');
+  ('b0000000-0000-4000-8000-000000000001', 65.00, 10.00, '12345678901', false, E'1 Example Lane - 3000\nMelbourne - Victoria - Australia',
+   '0400 000 000', 'Example Bank', 'Marcus Webb', '123456', '12345678');
+
+-- Reassessments the demo trainer marked in weeks 5 and 6 (billed on that fortnight's invoice)
+insert into public.marked_assessments (trainer_id, marked_on, activity, unit_code, term, course, kind, quantity) values
+  ('b0000000-0000-4000-8000-000000000001', '2026-10-21', 'Assessment 2', 'ICTWEB519', 'Term 3 - 2026', 'DIPLOMA IT FOUNDATION', 'Reassessment', 2),
+  ('b0000000-0000-4000-8000-000000000001', '2026-10-28', 'Assessment 1', 'ICTWEB520', 'Term 3 - 2026', 'DIPLOMA IT FOUNDATION', 'Reassessment', 1);
 
 -- ---------------------------------------------------------------------------
 -- Announcements (the trigger creates student notifications for each)

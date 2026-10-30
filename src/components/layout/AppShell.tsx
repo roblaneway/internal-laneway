@@ -3,6 +3,7 @@ import { NavLink, Outlet } from 'react-router-dom'
 import {
   BookOpen,
   CalendarDays,
+  ClipboardCheck,
   ClipboardList,
   GraduationCap,
   LayoutDashboard,
@@ -46,6 +47,8 @@ const NAV: { heading?: string; items: NavItem[] }[] = [
       { to: '/timetable', label: 'My timetable', icon: CalendarDays, roles: ['student'] },
       { to: '/roster', label: 'Roster', icon: CalendarDays, roles: ['admin'] },
       { to: '/roster', label: 'My roster', icon: CalendarDays, roles: ['trainer'] },
+      { to: '/assessments', label: 'Assessments', icon: ClipboardCheck, roles: ['admin'] },
+      { to: '/assessments', label: 'My assessments', icon: ClipboardCheck, roles: ['trainer'] },
       { to: '/classes', label: 'My classes', icon: BookOpen, roles: ['trainer', 'student'] },
       { to: '/classes', label: 'Content plans', icon: ClipboardList, roles: ['admin'] },
       { to: '/announcements', label: 'Announcements', icon: Megaphone, roles: ['admin', 'trainer', 'student'] },

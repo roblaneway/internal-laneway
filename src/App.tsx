@@ -8,6 +8,7 @@ import { DashboardPage } from '@/pages/DashboardPage'
 // Route-level code splitting keeps the editor and admin screens out of the first load.
 const RosterPage = lazy(() => import('@/pages/RosterPage').then((m) => ({ default: m.RosterPage })))
 const InvoicePage = lazy(() => import('@/pages/InvoicePage').then((m) => ({ default: m.InvoicePage })))
+const AssessmentsPage = lazy(() => import('@/pages/AssessmentsPage').then((m) => ({ default: m.AssessmentsPage })))
 const TimetablePage = lazy(() => import('@/pages/TimetablePage').then((m) => ({ default: m.TimetablePage })))
 const AnnouncementsPage = lazy(() => import('@/pages/AnnouncementsPage').then((m) => ({ default: m.AnnouncementsPage })))
 const AnnouncementDetailPage = lazy(() => import('@/pages/AnnouncementsPage').then((m) => ({ default: m.AnnouncementDetailPage })))
@@ -36,6 +37,7 @@ export default function App() {
           <Route element={<RequireRole roles={['admin', 'trainer']} />}>
             <Route path="roster" element={<RosterPage />} />
             <Route path="roster/invoice" element={<InvoicePage />} />
+            <Route path="assessments" element={<AssessmentsPage />} />
           </Route>
           <Route path="admin" element={<RequireRole roles={['admin']} />}>
             <Route index element={<Navigate to="users" replace />} />

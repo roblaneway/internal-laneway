@@ -84,7 +84,17 @@ api.get('/classes', async (c) =>
     ),
   ),
 )
-crud('/classes', 'classes', ['course_id', 'name', 'room', 'delivery_mode', 'term', 'start_date', 'trainer_id'])
+crud('/classes', 'classes', [
+  'course_id',
+  'name',
+  'room',
+  'delivery_mode',
+  'term',
+  'start_date',
+  'trainer_id',
+  'invoice_label',
+  'paid_hours',
+])
 
 api.get('/enrolments', async (c) => {
   const classId = c.req.query('class_id')
@@ -254,9 +264,11 @@ const BILLING_COLUMNS = [
   'gst_registered',
   'address',
   'phone',
+  'bank_name',
   'bank_account_name',
   'bank_bsb',
   'bank_account_number',
+  'assessment_rate',
 ] as const
 
 /** A trainer's invoice details, or null if none are saved yet (or RLS hides them). */
@@ -265,7 +277,7 @@ api.get('/trainer-billing/:trainerId', async (c) => {
   return c.json(row ?? null)
 })
 
-/** Create or update a trainer's invoice details. Only admins may change the hourly rate (trigger). */
+/** Create or update a trainer's invoice details. Only admins may change the rates (trigger). */
 api.put('/trainer-billing/:trainerId', async (c) => {
   const data = pick(await body(c), BILLING_COLUMNS)
   const cols = Object.keys(data)
@@ -282,3 +294,24 @@ api.put('/trainer-billing/:trainerId', async (c) => {
   )
   return c.json(found(row))
 })
+
+// --- Marked assessments ------------------------------------------------------
+
+/** Assessments marked between two dates; RLS limits trainers to their own. */
+api.get('/marked-assessments', async (c) => {
+  const [from, to] = requiredQuery(c, 'from', 'to')
+  const trainerId = c.req.query('trainer_id')
+  return c.json(
+    await run(c, (sql) =>
+      trainerId
+        ? sql(
+            `select * from public.marked_assessments where marked_on between $1 and $2 and trainer_id = $3
+             order by marked_on, created_at`,
+            [from, to, trainerId],
+          )
+        : sql('select * from public.marked_assessments where marked_on between $1 and $2 order by marked_on, created_at', [from, to]),
+    ),
+  )
+})
+// trainer_id defaults to the signed-in user; only admins can record marking for someone else (RLS).
+crud('/marked-assessments', 'marked_assessments', ['trainer_id', 'marked_on', 'activity', 'unit_code', 'term', 'course', 'kind', 'quantity'])

@@ -1,27 +1,46 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { AlertTriangle, ArrowLeft, FileText, Pencil, Printer } from 'lucide-react'
+import { toast } from 'sonner'
+import { AlertTriangle, ArrowLeft, ClipboardCheck, FileSpreadsheet, FileText, Loader2, Pencil, Printer } from 'lucide-react'
+import '@fontsource/josefin-sans/400.css'
+import '@fontsource/josefin-sans/600.css'
+import '@fontsource/cormorant-garamond/400.css'
+import '@fontsource/cormorant-garamond/500.css'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState, ErrorState } from '@/components/EmptyState'
 import { BillingDialog } from '@/components/roster/BillingDialog'
-import { useClasses, useProfileMap, useProfiles, useShifts, useTrainerBilling } from '@/hooks/use-data'
-import { addDays, formatDate, formatDayDate, formatTimeRange, startOfWeek, todayISO } from '@/lib/dates'
+import {
+  useAllContentPlans,
+  useClasses,
+  useMarkedAssessments,
+  useProfileMap,
+  useProfiles,
+  useShifts,
+  useTrainerBilling,
+} from '@/hooks/use-data'
+import { addDays, formatDate, startOfWeek, todayISO } from '@/lib/dates'
 import {
   BILL_TO,
-  PAYMENT_TERMS_DAYS,
   buildInvoice,
-  formatAbn,
+  formatAccountNumber,
   formatBsb,
-  formatHours,
   formatMoney,
+  formatRate,
+  formatWeeks,
   invoiceEnd,
+  invoiceFileName,
   missingBillingDetails,
 } from '@/lib/invoice'
 import { useProfile } from '@/auth/AuthProvider'
+import { cn } from '@/lib/utils'
 
-/** A fortnight's invoice from a trainer to Laneway, built from the roster. Print it or save it as PDF. */
+// Laneway's invoice template: Josefin Sans headings over Cormorant Garamond text.
+const HEADING = "font-['Josefin_Sans'] font-semibold tracking-[0.18em] uppercase"
+const TEXT = "font-['Cormorant_Garamond'] tracking-[0.06em]"
+
+/** A fortnight's invoice from a trainer to Laneway, built from the roster and marked assessments. */
 export function InvoicePage() {
   const me = useProfile()
   const isAdmin = me.role === 'admin'
@@ -40,12 +59,19 @@ export function InvoicePage() {
   const billing = useTrainerBilling(trainerId || undefined)
   const shifts = useShifts(from, to)
   const classes = useClasses()
+  const assessments = useMarkedAssessments(from, to, trainerId)
+  const plans = useAllContentPlans()
   const [editing, setEditing] = useState(false)
+  const [exporting, setExporting] = useState(false)
+
+  const topics = useMemo(() => new Map((plans.data ?? []).map((p) => [`${p.class_id}:${p.week_number}`, p.topic])), [plans.data])
 
   const backTo = `/roster?${new URLSearchParams({ range: 'month', month: from.slice(0, 7), ...(isAdmin && { trainer: trainerId }) })}`
-
-  if (shifts.error || billing.error) return <ErrorState error={(shifts.error ?? billing.error)!} />
-  if (profilesQuery.isPending || billing.isPending || shifts.isPending || classes.isPending) return <Skeleton className="h-[40rem] w-full" />
+  const error = shifts.error ?? billing.error ?? assessments.error ?? classes.error
+  if (error) return <ErrorState error={error} />
+  if (profilesQuery.isPending || billing.isPending || shifts.isPending || classes.isPending || assessments.isPending) {
+    return <Skeleton className="h-[40rem] w-full" />
+  }
   if (!trainer) {
     return (
       <EmptyState
@@ -62,11 +88,52 @@ export function InvoicePage() {
   }
 
   const details = billing.data ?? null
-  const invoice = buildInvoice(trainer, details, shifts.data ?? [], from, today)
-  const missing = missingBillingDetails(details)
-  const due = addDays(today, PAYMENT_TERMS_DAYS)
-  const className = (id: string) => classes.data?.find((c) => c.id === id)
+  const invoice = buildInvoice({
+    trainer,
+    billing: details,
+    shifts: shifts.data ?? [],
+    classes: classes.data ?? [],
+    assessments: assessments.data ?? [],
+    from,
+    today,
+  })
+  const missing = missingBillingDetails(details, invoice)
   const canEditDetails = isAdmin || trainer.id === me.id
+  const assessmentsLink = `/assessments?${new URLSearchParams({ from, ...(isAdmin && { trainer: trainer.id }) })}`
+
+  // The browser names the saved PDF after the page title, e.g. Invoice-Laneway-November-1-2026.pdf.
+  const print = () => {
+    const title = document.title
+    document.title = invoiceFileName(from)
+    window.addEventListener('afterprint', () => (document.title = title), { once: true })
+    window.print()
+  }
+
+  const downloadSpreadsheet = async () => {
+    setExporting(true)
+    try {
+      const { downloadInvoiceSpreadsheet } = await import('@/lib/invoice-xlsx')
+      await downloadInvoiceSpreadsheet({
+        invoice,
+        trainer,
+        from,
+        topicFor: (classId, week) => (week === null ? undefined : topics.get(`${classId}:${week}`)),
+      })
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't create the spreadsheet")
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  const payToLines = (details?.address ?? '').split('\n').filter((line) => line.trim())
+  const bankRows: [string, string | null | undefined][] = [
+    ['Bank', details?.bank_name],
+    ['Account Name', details?.bank_account_name],
+    ['BSB', details?.bank_bsb && formatBsb(details.bank_bsb)],
+    ['Account Number', details?.bank_account_number && formatAccountNumber(details.bank_account_number)],
+    ['ABN', details?.abn],
+  ]
 
   return (
     <>
@@ -82,13 +149,25 @@ export function InvoicePage() {
               <Pencil className="size-4" /> Invoice details
             </Button>
           )}
-          <Button onClick={() => window.print()}>
+          <Button asChild variant="outline">
+            <Link to={assessmentsLink}>
+              <ClipboardCheck className="size-4" /> Assessments
+            </Link>
+          </Button>
+          <Button variant="outline" onClick={downloadSpreadsheet} disabled={exporting || plans.isPending}>
+            {exporting ? <Loader2 className="size-4 animate-spin" /> : <FileSpreadsheet className="size-4" />} Spreadsheet (.xlsx)
+          </Button>
+          <Button onClick={print}>
             <Printer className="size-4" /> Print / Save as PDF
           </Button>
         </div>
       </div>
 
       <div className="mb-4 space-y-2 print:hidden">
+        <p className="text-sm text-muted-foreground">
+          {trainer.full_name} · {formatDate(from)} – {formatDate(to)}
+          {invoice.weekNumbers.length > 0 && ` · term weeks ${formatWeeks(invoice.weekNumbers)}`}
+        </p>
         {missing.length > 0 && (
           <Alert>
             <AlertTriangle className="size-4" />
@@ -114,113 +193,84 @@ export function InvoicePage() {
         )}
       </div>
 
-      <article className="mx-auto max-w-3xl rounded-lg border bg-card p-6 text-card-foreground shadow-sm sm:p-10 print:max-w-none print:border-0 print:bg-white print:p-0 print:text-black print:shadow-none">
-        <header className="flex flex-col gap-6 sm:flex-row sm:justify-between">
-          <div>
-            <h1 className="text-3xl font-bold uppercase">{details?.gst_registered ? 'Tax invoice' : 'Invoice'}</h1>
-            <p className="mt-3 text-sm font-semibold">{details?.business_name || trainer.full_name}</p>
-            {details?.business_name && <p className="text-sm">{trainer.full_name}</p>}
-            {details?.abn && <p className="text-sm">ABN {formatAbn(details.abn)}</p>}
-            {details?.address && <p className="text-sm whitespace-pre-line">{details.address}</p>}
-            <p className="text-sm">
-              {trainer.email}
-              {details?.phone && ` · ${details.phone}`}
-            </p>
-          </div>
-          <dl className="grid h-fit grid-cols-[auto_auto] gap-x-4 gap-y-1 text-sm sm:text-right">
-            <dt className="text-muted-foreground">Invoice no.</dt>
-            <dd className="font-medium">{invoice.number}</dd>
-            <dt className="text-muted-foreground">Date</dt>
-            <dd>{formatDate(today)}</dd>
-            <dt className="text-muted-foreground">Due</dt>
-            <dd>{formatDate(due)}</dd>
-            <dt className="text-muted-foreground">Period</dt>
-            <dd>
-              {formatDate(from)} – {formatDate(to)}
-            </dd>
-          </dl>
-        </header>
+      {/* Paper stays white in dark mode, like the printed invoice. */}
+      <article className="mx-auto flex aspect-[210/297] w-full max-w-[52rem] flex-col bg-white px-6 py-10 text-neutral-900 shadow-sm ring-1 ring-black/5 sm:px-[9%] sm:py-[8%] print:aspect-auto print:min-h-[260mm] print:max-w-none print:p-0 print:shadow-none print:ring-0">
+        <h1 className="text-right font-['Josefin_Sans'] text-4xl font-normal tracking-[0.2em] sm:text-6xl">
+          {details?.gst_registered ? 'TAX INVOICE' : 'INVOICE'}
+        </h1>
 
-        <section className="mt-8">
-          <h2 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Bill to</h2>
-          <p className="mt-1 text-sm font-semibold">{BILL_TO.name}</p>
-          <p className="text-sm">{BILL_TO.address}</p>
-        </section>
+        <dl className="mt-12 grid grid-cols-[auto_1fr] gap-x-6 text-base sm:mt-20 print:mt-14 sm:gap-x-8 sm:text-lg">
+          <dt className={cn(HEADING, 'text-sm sm:text-base')}>Billed to:</dt>
+          <dd className={TEXT}>{BILL_TO.name}</dd>
+          <dt className={cn(HEADING, 'mt-4 text-sm sm:text-base')}>Pay to:</dt>
+          <dd className={cn(TEXT, 'mt-4')}>
+            <p>{details?.business_name || trainer.full_name}</p>
+            {payToLines.map((line, i) => (
+              <p key={i}>{line}</p>
+            ))}
+          </dd>
+          {bankRows.map(([label, value], i) => (
+            <div key={label} className={cn('contents', TEXT)}>
+              <dt className={cn(i === 0 && 'mt-4')}>{label}</dt>
+              <dd className={cn(i === 0 && 'mt-4', !value && 'text-neutral-400')}>{value || '—'}</dd>
+            </div>
+          ))}
+        </dl>
 
-        <table className="mt-8 w-full text-sm">
+        <table className="mt-12 w-full text-sm sm:mt-16 sm:text-base print:mt-12">
           <thead>
-            <tr className="border-b text-left text-xs text-muted-foreground">
-              <th className="py-2 pr-2 font-semibold">Date</th>
-              <th className="py-2 pr-2 font-semibold">Class</th>
-              <th className="py-2 pr-2 font-semibold">Time</th>
-              <th className="py-2 pr-2 text-right font-semibold">Hours</th>
-              <th className="py-2 pr-2 text-right font-semibold">Rate</th>
-              <th className="py-2 text-right font-semibold">Amount</th>
+            <tr className={cn(HEADING, 'border-b border-neutral-900 text-xs sm:text-sm')}>
+              <th className="pb-5 text-left font-semibold">Description</th>
+              <th className="pb-5 text-center font-semibold">Rate</th>
+              <th className="pb-5 text-center font-semibold">Week</th>
+              <th className="pb-5 text-right font-semibold">Amount</th>
             </tr>
           </thead>
-          <tbody>
-            {invoice.lines.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="py-6 text-center text-muted-foreground">
-                  No sessions delivered in this fortnight.
+          <tbody className={TEXT}>
+            {invoice.lines.length === 0 && invoice.assessmentCount === 0 ? (
+              <tr className="border-b border-neutral-900">
+                <td colSpan={4} className="py-5 text-center text-neutral-500">
+                  No sessions or assessments in this fortnight.
                 </td>
               </tr>
             ) : (
-              invoice.lines.map(({ shift, hours, amount }) => {
-                const cls = className(shift.class_id)
-                return (
-                  <tr key={shift.id} className="border-b align-top">
-                    <td className="py-2 pr-2 whitespace-nowrap">{formatDayDate(shift.date)}</td>
-                    <td className="py-2 pr-2">
-                      {cls?.name ?? 'Class'}
-                      {cls?.course && <span className="block text-xs text-muted-foreground">{cls.course.code}</span>}
-                      {shift.cover_trainer_id === trainer.id && <span className="block text-xs text-muted-foreground">Cover</span>}
-                    </td>
-                    <td className="py-2 pr-2 whitespace-nowrap">{formatTimeRange(shift.start_time, shift.end_time)}</td>
-                    <td className="py-2 pr-2 text-right">{formatHours(hours)}</td>
-                    <td className="py-2 pr-2 text-right">{formatMoney(invoice.rateCents)}</td>
-                    <td className="py-2 text-right">{formatMoney(amount)}</td>
+              <>
+                {invoice.lines.map((line) => (
+                  <tr key={line.classId} className="border-b border-neutral-900">
+                    <td className="py-5 pr-2">{line.description}</td>
+                    <td className="py-5 text-center whitespace-nowrap">{formatRate(invoice.rateCents)}/hr</td>
+                    <td className="py-5 text-center">{formatWeeks(line.weeks)}</td>
+                    <td className="py-5 text-right">{formatMoney(line.amount)}</td>
                   </tr>
-                )
-              })
+                ))}
+                {invoice.assessmentCount > 0 && (
+                  <tr className="border-b border-neutral-900">
+                    <td className="py-5 pr-2">Assessments</td>
+                    <td className="py-5 text-center whitespace-nowrap">{formatRate(invoice.assessmentRateCents)}/ea</td>
+                    <td className="py-5 text-center">{formatWeeks(invoice.weekNumbers)}</td>
+                    <td className="py-5 text-right">{formatMoney(invoice.assessmentAmount)}</td>
+                  </tr>
+                )}
+              </>
             )}
           </tbody>
         </table>
 
-        <dl className="mt-4 ml-auto grid w-full max-w-xs grid-cols-[1fr_auto] gap-x-6 gap-y-1 text-sm">
-          <dt className="text-muted-foreground">Total hours</dt>
-          <dd className="text-right">{formatHours(invoice.hours)}</dd>
-          <dt className="text-muted-foreground">Subtotal</dt>
-          <dd className="text-right">{formatMoney(invoice.subtotal)}</dd>
+        <div className="mt-auto pt-16 print:pt-8">
           {details?.gst_registered && (
-            <>
-              <dt className="text-muted-foreground">GST (10%)</dt>
+            <dl className={cn(TEXT, 'mb-3 grid grid-cols-[1fr_auto] gap-y-1 text-base')}>
+              <dt>Subtotal</dt>
+              <dd className="text-right">{formatMoney(invoice.subtotal)}</dd>
+              <dt>GST (10%)</dt>
               <dd className="text-right">{formatMoney(invoice.gst)}</dd>
-            </>
-          )}
-          <dt className="border-t pt-2 font-semibold">Total (AUD)</dt>
-          <dd className="border-t pt-2 text-right font-semibold">{formatMoney(invoice.total)}</dd>
-        </dl>
-        {!details?.gst_registered && <p className="mt-2 text-right text-xs text-muted-foreground">No GST has been charged.</p>}
-
-        <section className="mt-10 border-t pt-4 text-sm">
-          <h2 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Payment details</h2>
-          {details?.bank_account_name && details.bank_bsb && details.bank_account_number ? (
-            <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
-              <dt className="text-muted-foreground">Account name</dt>
-              <dd>{details.bank_account_name}</dd>
-              <dt className="text-muted-foreground">BSB</dt>
-              <dd>{formatBsb(details.bank_bsb)}</dd>
-              <dt className="text-muted-foreground">Account number</dt>
-              <dd>{details.bank_account_number}</dd>
-              <dt className="text-muted-foreground">Reference</dt>
-              <dd>{invoice.number}</dd>
             </dl>
-          ) : (
-            <p className="mt-2 text-muted-foreground">Bank details not provided.</p>
           )}
-          <p className="mt-4 text-xs text-muted-foreground">Payment due within {PAYMENT_TERMS_DAYS} days. Sessions are taken from the Laneway roster.</p>
-        </section>
+          <div className={cn(HEADING, 'flex items-baseline justify-between border-t border-neutral-900 pt-6 text-base sm:text-lg')}>
+            <span>Total</span>
+            <span>{formatMoney(invoice.total)}</span>
+          </div>
+          <p className={cn(TEXT, 'mt-10 text-base sm:text-lg print:mt-8')}>Thank you for your business.</p>
+        </div>
       </article>
 
       {canEditDetails && <BillingDialog trainer={trainer} canEditRate={isAdmin} open={editing} onOpenChange={setEditing} />}
