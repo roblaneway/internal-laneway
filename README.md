@@ -121,9 +121,8 @@ and UI only mirror it.
   picker.
 - **Cover:** flagging a shift sets `needs_cover`. Assigning a cover trainer sets status to `covered`
   automatically. Trainers request cover through `request_cover()`.
-- **Existing overlaps:** the seed deliberately includes one overlap, "imported from a legacy roster",
-  with the trigger bypassed. `roster_conflicts()` finds such overlaps, and they're flagged on the
-  admin dashboard and the roster.
+- **Existing overlaps:** shifts that already overlap (for example, imported with the trigger
+  bypassed) are found by `roster_conflicts()` and flagged on the admin dashboard and the roster.
 - **Announcement notifications:** trigger `notify_announcement` inserts one notification per
   targeted student when an announcement is published. Edits don't notify again, and deleting an
   announcement removes its notifications.
@@ -149,7 +148,7 @@ and UI only mirror it.
 
 ```
 db/migrations/         schema, functions, triggers, RLS and grants (plain SQL, applied in order)
-db/seed.sql            demo data (dates are relative to the day it runs)
+db/seed.sql            demo users plus the Term 4 2026 IT classes, rosters and content plans
 server/                Node API: auth, routes, realtime (SSE), migration runner, Vercel entry
 scripts/               role-by-role access test, Vercel packaging
 src/auth               session context and route guards

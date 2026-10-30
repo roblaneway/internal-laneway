@@ -85,18 +85,18 @@ async function as(email: string, password = PASSWORD) {
   check('student sees only own class sessions', shifts.data.length > 0 && shifts.data.every((x: any) => x.class_id === CLASS(1)), `${shifts.data.length} sessions`)
 }
 
-// Trainer (Marcus: lead for classes 1 and 4, plus the imported class 3 shift)
+// Trainer (Marcus: lead trainer for class 1 only)
 {
   const t = await as('trainer@example.com')
   const shifts = await t.get('/shifts', ALL_TIME)
   check('trainer sees only own shifts', shifts.data.every((x: any) => x.trainer_id === t.id || x.cover_trainer_id === t.id), `${shifts.data.length} shifts`)
   const own = await t.post('/announcements', { title: 'RLS test', body: '<p>t</p>', audience: 'class', target_id: CLASS(1) })
   check('trainer can post to own class', own.status === 201, own.data?.error)
-  const other = await t.post('/announcements', { title: 'RLS test', body: 't', audience: 'class', target_id: CLASS(6) })
+  const other = await t.post('/announcements', { title: 'RLS test', body: 't', audience: 'class', target_id: CLASS(4) })
   check('trainer cannot post to another class', other.status === 403, other.data?.error)
   const all = await t.post('/announcements', { title: 'RLS test', body: 't', audience: 'all' })
   check('trainer cannot post to all students', all.status === 403, all.data?.error)
-  const otherPlan = (await t.get('/content-plans', { class_id: CLASS(5) })).data[0]
+  const otherPlan = (await t.get('/content-plans', { class_id: CLASS(3) })).data[0]
   const planOther = await t.patch(`/content-plans/${otherPlan.id}`, { topic: 'hijack' })
   check('trainer cannot edit another class plan', planOther.status === 404, `status ${planOther.status}`)
   const week8 = (await t.get('/content-plans', { class_id: CLASS(1) })).data.find((p: any) => p.week_number === 8)
@@ -122,11 +122,11 @@ async function as(email: string, password = PASSWORD) {
 {
   const a = await as('admin@example.com')
   const shifts = (await a.get('/shifts', ALL_TIME)).data
-  check('admin sees all shifts', shifts.length === 25, `saw ${shifts.length}`)
-  const day = shifts.find((x: any) => x.class_id === CLASS(1))
-  const overlap = await a.post('/shifts', { trainer_id: day.trainer_id, class_id: CLASS(6), date: day.date, start_time: '10:00', end_time: '12:00' })
+  check('admin sees all shifts', shifts.length === 40, `saw ${shifts.length}`)
+  const day = shifts.find((x: any) => x.class_id === CLASS(1) && x.status !== 'cancelled')
+  const overlap = await a.post('/shifts', { trainer_id: day.trainer_id, class_id: CLASS(4), date: day.date, start_time: '10:00', end_time: '12:00' })
   check('overlapping shift is blocked', overlap.status === 409 && overlap.data.code === '23P01', overlap.data?.error)
-  const ok = await a.post('/shifts', { trainer_id: day.trainer_id, class_id: CLASS(6), date: day.date, start_time: '15:00', end_time: '16:00' })
+  const ok = await a.post('/shifts', { trainer_id: day.trainer_id, class_id: CLASS(4), date: day.date, start_time: '15:00', end_time: '16:00' })
   check('back-to-back shift (starts as another ends) is allowed', ok.status === 201, ok.data?.error)
   if (ok.status === 201) await a.del(`/shifts/${ok.data.id}`)
 
