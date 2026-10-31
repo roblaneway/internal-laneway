@@ -48,22 +48,23 @@ into an empty database.
 
 **Environment variables:** `DATABASE_URL` (required), `JWT_SECRET` (required in production, a long
 random string), `PORT` (set by most hosts), `SEED_IF_EMPTY`, `MIGRATE_ON_START` (default on).
-For email invites: `SMTP_USER` and `SMTP_PASS` (see **Email invites** below), and optionally
-`MAIL_FROM`, `SMTP_HOST`/`SMTP_PORT` (default Gmail, 465) and `APP_URL` (the sign-in link's base,
-defaults to the site the admin is using).
+For email invites: `RESEND_API_KEY` and `MAIL_FROM` (see **Email invites** below), and optionally
+`APP_URL` (the sign-in link's base, defaults to the site the admin is using).
 
-### Email invites (free with Gmail)
+### Email invites (Resend)
 
 Admins invite people from **Users & roles → Invite user** (or re-send with the envelope icon). The
 person gets an email with a temporary password valid for 7 days; when they first sign in they must
 choose their own password before anything else works (the API enforces it). Anyone can change their
-password later from the account menu. To send through Gmail (free, about 500 emails a day):
+password later from the account menu. Emails go through [Resend](https://resend.com) (free tier:
+3,000 a month, 100 a day):
 
-1. Turn on 2-Step Verification for the Gmail account, then create an **App password** at
-   <https://myaccount.google.com/apppasswords>.
-2. Set `SMTP_USER` to the Gmail address and `SMTP_PASS` to the 16-character App password (in
-   Vercel: Settings → Environment Variables, then redeploy). Optionally set
-   `MAIL_FROM="Laneway Education <you@gmail.com>"`.
+1. In Resend, add and verify a domain you own (**Domains → Add domain**, then add the DNS records it
+   shows). Until then Resend only delivers to your own Resend account's address, from
+   `onboarding@resend.dev`.
+2. Create an API key (**API Keys**, "Sending access" is enough) and set `RESEND_API_KEY` to it, and
+   `MAIL_FROM="Laneway Education <portal@your-domain.com>"` (in Vercel: Settings → Environment
+   Variables, then redeploy).
 
 Without these, development prints invite emails in the API's console instead of sending them, and
 production shows an error rather than creating an account nobody can sign in to.
@@ -81,7 +82,7 @@ frontend, applies migrations, seeds an empty database and writes Vercel's Build 
    This sets `DATABASE_URL` (pooled, used by the API) and `DATABASE_URL_UNPOOLED` (direct, used
    for migrations).
 3. Add environment variables `JWT_SECRET` (a long random string, e.g. from `openssl rand -hex 32`)
-   and `DATABASE_POOL_SIZE=3`, plus `SMTP_USER`/`SMTP_PASS` for email invites, then deploy.
+   and `DATABASE_POOL_SIZE=3`, plus `RESEND_API_KEY`/`MAIL_FROM` for email invites, then deploy.
 
 Vercel's free Hobby plan is for personal, non-commercial use. Preview deployments run the
 migrations too, against whichever database their `DATABASE_URL` points to.

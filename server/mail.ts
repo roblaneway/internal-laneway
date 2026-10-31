@@ -1,20 +1,13 @@
-import nodemailer from 'nodemailer'
 import { HttpError } from './errors.ts'
 
-// Outgoing email over SMTP. Defaults suit Gmail with an App password (free, ~500 emails a day):
-// set SMTP_USER to the Gmail address and SMTP_PASS to the 16-character App password.
-// Without SMTP settings, development prints emails to the console instead of sending them.
+// Outgoing email through Resend's HTTP API (free tier: 3,000 emails a month, 100 a day).
+// Set RESEND_API_KEY, and MAIL_FROM to an address on a domain verified in Resend. Until a domain
+// is verified, Resend only sends from onboarding@resend.dev to the account owner's own address.
+// Without RESEND_API_KEY, development prints emails to the console instead of sending them.
 
-const user = process.env.SMTP_USER
-const pass = process.env.SMTP_PASS
-const port = Number(process.env.SMTP_PORT ?? 465)
-const from = process.env.MAIL_FROM || (user ? `Laneway Education <${user}>` : 'Laneway Education <no-reply@localhost>')
+const apiKey = process.env.RESEND_API_KEY
+const from = process.env.MAIL_FROM || 'Laneway Education <onboarding@resend.dev>'
 const isProduction = process.env.NODE_ENV === 'production'
-
-const transport =
-  user && pass
-    ? nodemailer.createTransport({ host: process.env.SMTP_HOST ?? 'smtp.gmail.com', port, secure: port === 465, auth: { user, pass } })
-    : null
 
 export interface Mail {
   to: string
@@ -24,16 +17,27 @@ export interface Mail {
 }
 
 export async function sendMail(mail: Mail) {
-  if (!transport) {
-    if (isProduction) throw new HttpError(503, "Email isn't set up yet. Add SMTP_USER and SMTP_PASS to the server's environment.")
-    console.log(`\n--- Email (not sent: SMTP_USER/SMTP_PASS not set) ---\nTo: ${mail.to}\nSubject: ${mail.subject}\n\n${mail.text}\n---\n`)
+  if (!apiKey) {
+    if (isProduction) throw new HttpError(503, "Email isn't set up yet. Add RESEND_API_KEY to the server's environment.")
+    console.log(`\n--- Email (not sent: RESEND_API_KEY not set) ---\nTo: ${mail.to}\nSubject: ${mail.subject}\n\n${mail.text}\n---\n`)
     return
   }
+  let res: Response
   try {
-    await transport.sendMail({ from, ...mail })
+    res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from, to: [mail.to], subject: mail.subject, text: mail.text, html: mail.html }),
+      signal: AbortSignal.timeout(15_000),
+    })
   } catch (err) {
     console.error('sendMail failed', err)
-    throw new HttpError(502, "The email couldn't be sent. Check the SMTP settings and try again.")
+    throw new HttpError(502, "The email couldn't be sent. Try again in a moment.")
+  }
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { message?: string } | null
+    console.error('sendMail failed', res.status, body)
+    throw new HttpError(502, `The email couldn't be sent${body?.message ? `: ${body.message}` : '.'}`)
   }
 }
 
