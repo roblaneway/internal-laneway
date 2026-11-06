@@ -37,7 +37,7 @@ The other 4 trainers and 39 students follow the pattern `first.last@example.com`
 | `npm run build:vercel` | Build, migrate and package for Vercel (see below) |
 | `npm run db:migrate` | Apply pending SQL migrations from `db/migrations` |
 | `npm run db:seed` / `db:reset` | Load the demo data / drop everything, migrate and seed |
-| `npm run test:rls` | 58 access-control checks through the API (run on fresh seed data) |
+| `npm run test:rls` | 68 access-control checks through the API (run on fresh seed data) |
 | `npm run user:password -- <email>` | Set a user's password from the terminal (hidden input, stored as a bcrypt hash) |
 
 ## Deploying for free
@@ -129,6 +129,7 @@ and UI only mirror it.
 | Notifications | Own only | Own only | Own only (can only change `read_at`) |
 | Content plans | Edit all | Read all, edit own classes | Read non-draft weeks of enrolled classes |
 | Users, courses, classes, enrolments | Full edit | Read | Own enrolments and classes |
+| Gradebook (student lists, results) | All classes | Own classes only | None |
 
 - A trainer's "own classes" are classes where they're the lead trainer (`classes.trainer_id`) or hold
   a non-cancelled shift (`public.teaches_class`).
@@ -166,6 +167,14 @@ and UI only mirror it.
 - **Assessments:** trainers record the assessments and reassessments they mark (activity, unit,
   course, term, quantity, date) under **My assessments**. Each entry is paid on the invoice for the
   fortnight it was marked in. `marked_assessments` is private to the trainer and admins.
+- **Gradebook:** under **Gradebook**, a class's trainers keep their own student list (pasted one per
+  line, optionally with a student ID; no portal accounts needed) and record a result for each
+  assessment (S, NYS, not submitted) and presentation (S, NYS, absent, rescheduled), with the attempt,
+  date and feedback. **Save & next student** speeds through a whole class. Withdrawn students keep
+  their results but leave the totals. `class_students`, `class_tasks` and `task_results` are
+  readable only by the class's trainers and admins, and composite foreign keys stop a result
+  pairing one class's task with another class's student. It's separate from the paid marked
+  assessments on invoices.
 - **Term length:** content plans cover a 10-week term. To change it, update `TERM_WEEKS` in
   `src/lib/dates.ts` and the `content_plans_week_number_check` constraint (with a new migration).
 - **Duplicate plan:** `duplicate_content_plan()` runs with the caller's permissions, so RLS decides
@@ -178,6 +187,7 @@ and UI only mirror it.
 - `classes.trainer_id` (lead trainer) and `classes.start_date` (week 1 of term, used to map
   `week_number` to dates).
 - `roster_shifts.needs_cover` and `roster_shifts.notes`.
+- `class_students`, `class_tasks` and `task_results` for the gradebook.
 - `app.credentials` for password hashes; `created_at` / `updated_at` timestamps where useful.
 
 ## Project layout

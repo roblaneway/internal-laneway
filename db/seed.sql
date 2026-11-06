@@ -224,3 +224,44 @@ where n.title not like '%Campus closure%'
 update public.notifications n set created_at = a.published_at, read_at = case when n.read_at is null then null else a.published_at + interval '1 day' end
 from public.announcements a
 where n.link = '/announcements/' || a.id;
+
+-- ---------------------------------------------------------------------------
+-- Gradebook: each class's student list (copied from its enrolments), this term's
+-- assessments and presentations, and some results for the Tuesday class.
+-- ---------------------------------------------------------------------------
+insert into public.class_students (class_id, full_name, student_number)
+select e.class_id, p.full_name, 'LW' || lpad((row_number() over (order by p.id) + 26000)::text, 6, '0')
+from public.class_enrolments e
+join public.profiles p on p.id = e.student_id;
+
+insert into public.class_tasks (id, class_id, kind, title, unit_code, due_date) values
+  ('f1000000-0000-4000-8000-000000000001', 'e0000000-0000-4000-8000-000000000001', 'assessment',   'Assessment 1',         'ICTWEB519', '2026-09-22'),
+  ('f1000000-0000-4000-8000-000000000002', 'e0000000-0000-4000-8000-000000000001', 'assessment',   'Assessment 3',         'ICTWEB519', '2026-09-29'),
+  ('f1000000-0000-4000-8000-000000000003', 'e0000000-0000-4000-8000-000000000001', 'assessment',   'Assessment 2 Project', 'ICTWEB520', '2026-10-27'),
+  ('f1000000-0000-4000-8000-000000000004', 'e0000000-0000-4000-8000-000000000001', 'presentation', 'Project demo',         'ICTWEB520', '2026-10-27'),
+  ('f1000000-0000-4000-8000-000000000005', 'e0000000-0000-4000-8000-000000000001', 'presentation', 'Final presentation',   'ICTWEB520', '2026-11-24'),
+  ('f1000000-0000-4000-8000-000000000006', 'e0000000-0000-4000-8000-000000000003', 'assessment',   'Assessment 1',         'ICTICT530', '2026-09-24');
+
+-- Assessments 1 and 3 and the project demo start as S for everyone, and the
+-- project is marked for the first five; then a few exceptions.
+create temp view demo_class_students as
+select cs.*, row_number() over (order by lower(cs.full_name)) as n
+from public.class_students cs where cs.class_id = 'e0000000-0000-4000-8000-000000000001';
+
+insert into public.task_results (task_id, student_id, class_id, result, marked_on)
+select t.id, s.id, t.class_id, 'S', t.due_date + 7
+from public.class_tasks t
+join demo_class_students s on s.class_id = t.class_id
+where t.id in ('f1000000-0000-4000-8000-000000000001', 'f1000000-0000-4000-8000-000000000002', 'f1000000-0000-4000-8000-000000000004')
+   or (t.id = 'f1000000-0000-4000-8000-000000000003' and s.n <= 5);
+
+update public.task_results r set result = x.result, attempt = x.attempt, feedback = x.feedback
+from (values
+  ('f1000000-0000-4000-8000-000000000001'::uuid, 3, 'S', 2, 'Resubmitted with the missing semantic tags.'),
+  ('f1000000-0000-4000-8000-000000000002'::uuid, 5, 'NYS', 1, 'Navigation is missing and the form has no labels.'),
+  ('f1000000-0000-4000-8000-000000000002'::uuid, 9, 'NS', 1, null),
+  ('f1000000-0000-4000-8000-000000000004'::uuid, 4, 'ABSENT', 1, 'Sick on the day; medical certificate provided.'),
+  ('f1000000-0000-4000-8000-000000000004'::uuid, 7, 'RESCHEDULED', 1, 'Presenting next week.')
+) as x(task_id, n, result, attempt, feedback)
+join demo_class_students s on s.n = x.n
+where r.task_id = x.task_id and r.student_id = s.id;

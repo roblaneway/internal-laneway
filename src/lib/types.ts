@@ -127,6 +127,49 @@ export interface MarkedAssessment {
   updated_at: string
 }
 
+/** A student on a trainer's list for a class (not necessarily a portal user). */
+export interface ClassStudent {
+  id: string
+  class_id: string
+  full_name: string
+  student_number: string | null
+  withdrawn: boolean
+  created_at: string
+}
+
+export type TaskKind = 'assessment' | 'presentation'
+
+/** An assessment or presentation in a class's gradebook. */
+export interface ClassTask {
+  id: string
+  class_id: string
+  kind: TaskKind
+  title: string
+  unit_code: string | null
+  due_date: string | null
+  created_at: string
+}
+
+/** S / NYS / NS (not submitted) for assessments; presentations can also be ABSENT or RESCHEDULED. */
+export type TaskResultValue = 'S' | 'NYS' | 'NS' | 'ABSENT' | 'RESCHEDULED'
+
+export interface TaskResult {
+  task_id: string
+  student_id: string
+  class_id: string
+  result: TaskResultValue
+  attempt: number
+  marked_on: string | null
+  feedback: string | null
+  updated_at: string
+}
+
+export interface Gradebook {
+  students: ClassStudent[]
+  tasks: ClassTask[]
+  results: TaskResult[]
+}
+
 export interface RosterConflict {
   shift_id: string
   other_shift_id: string

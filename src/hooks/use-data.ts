@@ -7,6 +7,7 @@ import type {
   ClassWithCourse,
   ContentPlan,
   Course,
+  Gradebook,
   MarkedAssessment,
   Notification,
   Profile,
@@ -32,6 +33,7 @@ export const keys = {
   billing: (trainerId: string) => ['billing', trainerId] as const,
   allAssessments: ['marked-assessments'] as const,
   pendingInvites: ['invites', 'pending'] as const,
+  gradebook: (classId: string) => ['gradebook', classId] as const,
   assessments: (from: string, to: string, trainerId: string) => ['marked-assessments', from, to, trainerId] as const,
 }
 
@@ -126,6 +128,15 @@ export function useMarkedAssessments(from: string, to: string, trainerId = '') {
     queryKey: keys.assessments(from, to, trainerId),
     queryFn: () =>
       api.get<MarkedAssessment[]>('/marked-assessments', { from, to, ...(trainerId && { trainer_id: trainerId }) }),
+  })
+}
+
+/** A class's gradebook: students, assessments/presentations and results (class trainers and admins). */
+export function useGradebook(classId: string | undefined) {
+  return useQuery({
+    queryKey: keys.gradebook(classId ?? ''),
+    enabled: Boolean(classId),
+    queryFn: () => api.get<Gradebook>(`/classes/${classId}/gradebook`),
   })
 }
 

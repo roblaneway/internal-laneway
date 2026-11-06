@@ -51,6 +51,15 @@ const MESSAGE_BY_CONSTRAINT: Record<string, string> = {
   marked_assessments_kind_check: 'Choose assessment or reassessment',
   marked_assessments_quantity_check: 'The quantity must be between 1 and 500',
   marked_assessments_trainer_id_fkey: 'That trainer no longer exists',
+  class_students_name_check: "Add the student's name",
+  class_students_class_id_fkey: 'That class no longer exists',
+  class_tasks_kind_check: 'Choose assessment or presentation',
+  class_tasks_title_check: 'Give it a name, like "Assessment 1"',
+  class_tasks_class_id_fkey: 'That class no longer exists',
+  task_results_result_check: 'Choose a result',
+  task_results_attempt_check: 'The attempt must be 1, 2 or 3',
+  task_results_task_fkey: "That student isn't on this class's list",
+  task_results_student_fkey: "That student isn't on this class's list",
 }
 
 interface PgError {

@@ -175,6 +175,47 @@ async function as(email: string, password = PASSWORD) {
   }
 }
 
+// Gradebook (the trainer's own student list and results, per class)
+{
+  const marcus = await as('trainer@example.com') // leads class 1
+  const aiko = await as('aiko.tanaka@example.com') // leads class 3, not class 1
+  const student = await as('student@example.com')
+  const admin = await as('admin@example.com')
+  const own = await marcus.get(`/classes/${CLASS(1)}/gradebook`)
+  check(
+    'trainer reads own class gradebook',
+    own.status === 200 && own.data.students.length === 10 && own.data.tasks.length === 5 && own.data.results.length > 0,
+    `saw ${own.data?.students?.length} students, ${own.data?.tasks?.length} tasks`,
+  )
+  const peek = await aiko.get(`/classes/${CLASS(1)}/gradebook`)
+  check(
+    "trainer cannot read another class's gradebook",
+    peek.status === 200 && peek.data.students.length + peek.data.tasks.length + peek.data.results.length === 0,
+    `saw ${peek.data?.students?.length} students`,
+  )
+  const studentPeek = await student.get(`/classes/${CLASS(1)}/gradebook`)
+  check('student cannot read the gradebook', studentPeek.status === 200 && studentPeek.data.students.length === 0 && studentPeek.data.results.length === 0)
+  const addElsewhere = await aiko.post(`/classes/${CLASS(1)}/students`, { students: [{ full_name: 'Sneaky Add' }] })
+  check("trainer cannot add students to another class", addElsewhere.status === 403, addElsewhere.data?.error)
+  const added = await marcus.post(`/classes/${CLASS(1)}/students`, { students: [{ full_name: 'Test Student' }, { full_name: own.data.students[0].full_name }] })
+  check('trainer adds students, skipping names already listed', added.status === 201 && added.data.added === 1 && added.data.skipped === 1, added.data?.error)
+  const task = own.data.tasks[0]
+  const target = own.data.students[0]
+  const hijack = await aiko.put(`/task-results/${task.id}/${target.id}`, { result: 'NYS' })
+  check("trainer cannot change another class's results", hijack.status === 404, `status ${hijack.status}`)
+  const aikoClass = (await aiko.get(`/classes/${CLASS(3)}/gradebook`)).data
+  const crossClass = await aiko.put(`/task-results/${aikoClass.tasks[0].id}/${target.id}`, { result: 'S' })
+  check("a result can't pair a task with another class's student", crossClass.status === 409, crossClass.data?.error)
+  const marked = await marcus.put(`/task-results/${task.id}/${target.id}`, { result: 'NYS', attempt: 2, feedback: 'Fix the layout' })
+  check('trainer records a result', marked.status === 200 && marked.data.result === 'NYS' && marked.data.attempt === 2, marked.data?.error)
+  const badResult = await marcus.put(`/task-results/${task.id}/${target.id}`, { result: 'A+' })
+  check('an unknown result is rejected', badResult.status === 400, badResult.data?.error)
+  const all = await admin.get(`/classes/${CLASS(1)}/gradebook`)
+  check('admin reads any class gradebook', all.status === 200 && all.data.students.length === 11, `saw ${all.data?.students?.length}`)
+  await pool.query("delete from public.class_students where full_name = 'Test Student'")
+  await pool.query("update public.task_results set result = 'S', attempt = 1, feedback = null where task_id = $1 and student_id = $2", [task.id, target.id])
+}
+
 // Email invites: temporary passwords expire and must be replaced before using the API
 {
   const admin = await as('admin@example.com')

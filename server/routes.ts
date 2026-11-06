@@ -352,3 +352,88 @@ api.get('/marked-assessments', async (c) => {
 })
 // trainer_id defaults to the signed-in user; only admins can record marking for someone else (RLS).
 crud('/marked-assessments', 'marked_assessments', ['trainer_id', 'marked_on', 'activity', 'unit_code', 'term', 'course', 'kind', 'quantity'])
+
+// --- Gradebook ---------------------------------------------------------------
+// The class's trainers and admins only (RLS); anyone else sees an empty gradebook.
+
+/** A class's students, assessments/presentations and results in one request. */
+api.get('/classes/:id/gradebook', async (c) => {
+  const classId = c.req.param('id')
+  return c.json(
+    await run(c, async (sql) => ({
+      students: await sql('select * from public.class_students where class_id = $1 order by withdrawn, lower(full_name)', [classId]),
+      tasks: await sql('select * from public.class_tasks where class_id = $1 order by due_date nulls last, created_at', [classId]),
+      results: await sql('select * from public.task_results where class_id = $1', [classId]),
+    })),
+  )
+})
+
+/** Add students to a class, skipping names already on its list. */
+api.post('/classes/:id/students', async (c) => {
+  const { students = [] } = (await body(c)) as { students?: { full_name?: string; student_number?: string | null }[] }
+  const rows = students
+    .map((s) => ({ full_name: String(s.full_name ?? '').trim(), student_number: String(s.student_number ?? '').trim() || null }))
+    .filter((s) => s.full_name)
+  if (!rows.length) throw new HttpError(400, 'Add at least one student name')
+  const added = await run(c, (sql) =>
+    sql(
+      `insert into public.class_students (class_id, full_name, student_number)
+       select $1, s.full_name, s.student_number
+       from jsonb_to_recordset($2::jsonb) as s(full_name text, student_number text)
+       where not exists (
+         select 1 from public.class_students e where e.class_id = $1 and lower(e.full_name) = lower(s.full_name)
+       )
+       returning *`,
+      [c.req.param('id'), JSON.stringify(rows)],
+    ),
+  )
+  return c.json({ added: added.length, skipped: rows.length - added.length }, 201)
+})
+
+api.patch('/class-students/:id', async (c) => {
+  const data = pick(await body(c), ['full_name', 'student_number', 'withdrawn'])
+  return c.json(found(await run(c, (sql) => updateRow(sql, 'class_students', c.req.param('id'), data))))
+})
+api.delete('/class-students/:id', async (c) => {
+  if (!(await run(c, (sql) => deleteRow(sql, 'class_students', c.req.param('id'))))) throw notFound()
+  return c.body(null, 204)
+})
+
+const TASK_COLUMNS = ['kind', 'title', 'unit_code', 'due_date'] as const
+
+api.post('/classes/:id/tasks', async (c) => {
+  const data = { ...pick(await body(c), TASK_COLUMNS), class_id: c.req.param('id') }
+  return c.json(await run(c, (sql) => insertRow(sql, 'class_tasks', data)), 201)
+})
+api.patch('/class-tasks/:id', async (c) => {
+  const data = pick(await body(c), TASK_COLUMNS)
+  return c.json(found(await run(c, (sql) => updateRow(sql, 'class_tasks', c.req.param('id'), data))))
+})
+api.delete('/class-tasks/:id', async (c) => {
+  if (!(await run(c, (sql) => deleteRow(sql, 'class_tasks', c.req.param('id'))))) throw notFound()
+  return c.body(null, 204)
+})
+
+/** Record or replace one student's result for a task. The task decides the class. */
+api.put('/task-results/:taskId/:studentId', async (c) => {
+  const { result, attempt = 1, marked_on = null, feedback = null } = await body(c)
+  if (!result) throw new HttpError(400, 'Choose a result')
+  const [row] = await run(c, (sql) =>
+    sql(
+      `insert into public.task_results (task_id, student_id, class_id, result, attempt, marked_on, feedback)
+       select t.id, $2, t.class_id, $3, $4, $5, nullif(btrim($6), '') from public.class_tasks t where t.id = $1
+       on conflict (task_id, student_id) do update
+         set result = excluded.result, attempt = excluded.attempt, marked_on = excluded.marked_on, feedback = excluded.feedback
+       returning *`,
+      [c.req.param('taskId'), c.req.param('studentId'), result ?? null, attempt, marked_on || null, feedback],
+    ),
+  )
+  return c.json(found(row))
+})
+api.delete('/task-results/:taskId/:studentId', async (c) => {
+  const rows = await run(c, (sql) =>
+    sql('delete from public.task_results where task_id = $1 and student_id = $2 returning task_id', [c.req.param('taskId'), c.req.param('studentId')]),
+  )
+  if (!rows.length) throw notFound()
+  return c.body(null, 204)
+})
