@@ -135,7 +135,10 @@ api.get('/classes', async (c) =>
         select cl.*, to_jsonb(co) as course
         from public.classes cl
         left join public.courses co on co.id = cl.course_id
-        order by cl.name`),
+        -- In teaching-week order (Tue class before Wed), then by name.
+        order by (select min(extract(isodow from s.date)) from public.roster_shifts s
+                  where s.class_id = cl.id and s.status <> 'cancelled') nulls last,
+                 cl.name`),
     ),
   ),
 )
