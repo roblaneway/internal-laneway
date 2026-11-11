@@ -27,7 +27,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { EmptyState, ErrorState } from '@/components/EmptyState'
 import { ListSkeleton } from '@/components/ListSkeleton'
 import { PageHeader } from '@/components/PageHeader'
-import { keys, useGradebook, useMyClasses } from '@/hooks/use-data'
+import { UnitCodeInput } from '@/components/UnitCodeInput'
+import { keys, useClassUnits, useGradebook, useMyClasses } from '@/hooks/use-data'
 import { api } from '@/lib/api'
 import { formatDate, inTerm, termWeek, todayISO } from '@/lib/dates'
 import { cn } from '@/lib/utils'
@@ -482,6 +483,7 @@ function TaskForm({ classId, kind, task, onDone }: { classId: string; kind: Task
   const queryClient = useQueryClient()
   const label = KIND_LABEL[kind].one
   const [title, setTitle] = useState(task?.title ?? '')
+  const units = useClassUnits(useMyClasses().data?.find((c) => c.id === classId))
   const [unitCode, setUnitCode] = useState(task?.unit_code ?? '')
   const [dueDate, setDueDate] = useState(task?.due_date ?? '')
   const done = () => {
@@ -536,7 +538,7 @@ function TaskForm({ classId, kind, task, onDone }: { classId: string; kind: Task
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label htmlFor="t-unit">Unit code</Label>
-            <Input id="t-unit" value={unitCode} onChange={(e) => setUnitCode(e.target.value.toUpperCase())} placeholder="ICTWEB519" />
+            <UnitCodeInput id="t-unit" value={unitCode} onChange={setUnitCode} units={units} placeholder="ICTWEB519" />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="t-due">{kind === 'presentation' ? 'Presentation date' : 'Due date'}</Label>

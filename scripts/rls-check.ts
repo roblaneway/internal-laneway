@@ -216,6 +216,35 @@ async function as(email: string, password = PASSWORD) {
   await pool.query("update public.task_results set result = 'S', attempt = 1, feedback = null where task_id = $1 and student_id = $2", [task.id, target.id])
 }
 
+// Course units: staff read, admins write
+{
+  const admin = await as('admin@example.com')
+  const marcus = await as('trainer@example.com')
+  const student = await as('student@example.com')
+  const seen = await marcus.get('/course-units')
+  check('trainer reads every course unit', seen.status === 200 && seen.data.length === 10, `saw ${seen.data?.length}`)
+  const studentSeen = await student.get('/course-units')
+  check('student cannot read course units', studentSeen.status === 200 && studentSeen.data.length === 0, `saw ${studentSeen.data?.length}`)
+  const unit = { course_id: seen.data[0].course_id, term: 'Term 1 2027', code: 'ICTTEST401', start_week: 2, end_week: 4 }
+  const byTrainer = await marcus.post('/course-units', unit)
+  check('trainer cannot add a unit', byTrainer.status === 403, byTrainer.data?.error)
+  const edit = await marcus.patch(`/course-units/${seen.data[0].id}`, { title: 'Hijacked' })
+  check('trainer cannot edit a unit', edit.status === 404, `status ${edit.status}`)
+  const created = await admin.post('/course-units', unit)
+  check('admin adds a unit', created.status === 201, created.data?.error)
+  const duplicate = await admin.post('/course-units', unit)
+  check('a unit is listed once per course and term', duplicate.status === 409, duplicate.data?.error)
+  const backwards = await admin.patch(`/course-units/${created.data.id}`, { start_week: 5, end_week: 3 })
+  check("a unit's last week can't be before its first", backwards.status === 400, backwards.data?.error)
+  const fromPlans = await admin.post('/course-units/from-plans', { term: 'Term 4 2026' })
+  check('filling from content plans skips units already listed', fromPlans.status === 200 && fromPlans.data.added === 0, fromPlans.data?.error)
+  const copied = await admin.post('/course-units/copy', { from: 'Term 4 2026', to: 'Term 1 2027' })
+  check('admin copies a term into another', copied.status === 200 && copied.data.added === 10, copied.data?.error ?? `added ${copied.data?.added}`)
+  const trainerCopy = await marcus.post('/course-units/copy', { from: 'Term 4 2026', to: 'Term 2 2027' })
+  check('trainer cannot copy a term', trainerCopy.status === 403, trainerCopy.data?.error)
+  await pool.query("delete from public.course_units where term <> 'Term 4 2026'")
+}
+
 // Email invites: temporary passwords expire and must be replaced before using the API
 {
   const admin = await as('admin@example.com')

@@ -9,7 +9,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { keys } from '@/hooks/use-data'
+import { UnitCodeInput } from '@/components/UnitCodeInput'
+import { keys, useClassUnits, useClasses } from '@/hooks/use-data'
 import { api } from '@/lib/api'
 import { addDays, formatDate } from '@/lib/dates'
 import type { ContentPlan, PlanStatus } from '@/lib/types'
@@ -35,7 +36,12 @@ export function PlanWeekDialog(props: Props) {
 
 function PlanWeekForm({ onOpenChange, classId, classStart, week, plan }: Props) {
   const queryClient = useQueryClient()
-  const [unit, setUnit] = useState(plan?.unit_code ?? '')
+  const cls = useClasses().data?.find((c) => c.id === classId)
+  const units = useClassUnits(cls)
+  // A new week starts with the unit the course runs that week, if the term's units say so.
+  const weekUnit = units.find((u) => u.start_week && week >= u.start_week && week <= (u.end_week ?? u.start_week))?.code
+  const [unit, setUnit] = useState<string | null>(plan ? (plan.unit_code ?? '') : null)
+  const unitValue = unit ?? weekUnit ?? ''
   const [topic, setTopic] = useState(plan?.topic ?? '')
   const [outcomes, setOutcomes] = useState(plan?.learning_outcomes ?? '')
   const [url, setUrl] = useState(plan?.resources_url ?? '')
@@ -47,7 +53,7 @@ function PlanWeekForm({ onOpenChange, classId, classStart, week, plan }: Props) 
   const save = useMutation({
     mutationFn: () =>
       api.put(`/content-plans/${classId}/weeks/${week}`, {
-        unit_code: unit.trim() || null,
+        unit_code: unitValue.trim() || null,
         topic: topic.trim(),
         learning_outcomes: outcomes.trim() || null,
         resources_url: url.trim() || null,
@@ -77,7 +83,7 @@ function PlanWeekForm({ onOpenChange, classId, classStart, week, plan }: Props) 
         <div className="grid gap-4 sm:grid-cols-[9rem_1fr]">
           <div className="space-y-1.5">
             <Label htmlFor="plan-unit">Unit code</Label>
-            <Input id="plan-unit" placeholder="ICTPRG434" value={unit} onChange={(e) => setUnit(e.target.value.toUpperCase())} />
+            <UnitCodeInput id="plan-unit" placeholder="ICTPRG434" value={unitValue} onChange={setUnit} units={units} />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="plan-topic">Topic</Label>

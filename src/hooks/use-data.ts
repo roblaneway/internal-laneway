@@ -7,6 +7,7 @@ import type {
   ClassWithCourse,
   ContentPlan,
   Course,
+  CourseUnit,
   Gradebook,
   MarkedAssessment,
   Notification,
@@ -34,6 +35,7 @@ export const keys = {
   allAssessments: ['marked-assessments'] as const,
   pendingInvites: ['invites', 'pending'] as const,
   gradebook: (classId: string) => ['gradebook', classId] as const,
+  courseUnits: ['course-units'] as const,
   assessments: (from: string, to: string, trainerId: string) => ['marked-assessments', from, to, trainerId] as const,
 }
 
@@ -42,6 +44,24 @@ export function useCourses() {
     queryKey: keys.courses,
     queryFn: () => api.get<Course[]>('/courses'),
   })
+}
+
+/** Every course's units for every term (staff only). */
+export function useCourseUnits(enabled = true) {
+  return useQuery({
+    queryKey: keys.courseUnits,
+    enabled,
+    queryFn: () => api.get<CourseUnit[]>('/course-units'),
+  })
+}
+
+/** The units a class's course delivers in the class's term, in week order. */
+export function useClassUnits(cls: { course_id: string; term: string } | undefined) {
+  const units = useCourseUnits(!!cls)
+  return useMemo(
+    () => (cls ? (units.data ?? []).filter((u) => u.course_id === cls.course_id && u.term === cls.term) : []),
+    [units.data, cls],
+  )
 }
 
 /** Classes visible to the current user (RLS: staff see all, students their own). */

@@ -265,3 +265,16 @@ from (values
 ) as x(task_id, n, result, attempt, feedback)
 join demo_class_students s on s.n = x.n
 where r.task_id = x.task_id and r.student_id = s.id;
+
+-- ---------------------------------------------------------------------------
+-- Units: each course's Term 4 2026 units, from the weeks in its content plan.
+-- ---------------------------------------------------------------------------
+insert into public.course_units (course_id, term, code, title, start_week, end_week, notes)
+select cl.course_id, cl.term, p.unit_code,
+       min(substr(p.learning_outcomes, length(p.unit_code) + 2)) filter (where p.learning_outcomes like p.unit_code || ' %'),
+       min(p.week_number), max(p.week_number),
+       case p.unit_code when 'ICTWEB520' then 'Week 7 is a public holiday.' end
+from public.content_plans p
+join public.classes cl on cl.id = p.class_id
+where p.unit_code is not null
+group by cl.course_id, cl.term, p.unit_code;

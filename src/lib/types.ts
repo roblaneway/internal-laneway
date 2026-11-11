@@ -164,6 +164,19 @@ export interface TaskResult {
   updated_at: string
 }
 
+export interface CourseUnit {
+  id: string
+  course_id: string
+  term: string
+  code: string
+  title: string | null
+  start_week: number | null
+  end_week: number | null
+  notes: string | null
+  resources_url: string | null
+  created_at: string
+}
+
 export interface Gradebook {
   students: ClassStudent[]
   tasks: ClassTask[]

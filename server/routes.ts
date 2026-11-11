@@ -154,6 +154,54 @@ crud('/classes', 'classes', [
   'paid_hours',
 ])
 
+// --- Course units ------------------------------------------------------------
+
+api.get('/course-units', async (c) =>
+  c.json(await run(c, (sql) => sql('select * from public.course_units order by term, course_id, start_week nulls last, code'))),
+)
+crud('/course-units', 'course_units', ['course_id', 'term', 'code', 'title', 'start_week', 'end_week', 'notes', 'resources_url'])
+
+/** Fill a term's units from the unit codes in its classes' content plans (admins only, by RLS). */
+api.post('/course-units/from-plans', async (c) => {
+  const { term } = await body(c)
+  if (!term) throw new HttpError(400, 'Choose a term')
+  const rows = await run(c, (sql) =>
+    sql(
+      `insert into public.course_units (course_id, term, code, title, start_week, end_week)
+       select cl.course_id, cl.term, upper(btrim(p.unit_code)),
+              -- Plans often say "ICTWEB519 Develop complex web page layouts" in the outcomes.
+              (array_agg(nullif(btrim(substr(p.learning_outcomes, length(btrim(p.unit_code)) + 1)), '') order by p.week_number)
+                 filter (where p.learning_outcomes ilike btrim(p.unit_code) || ' %'))[1],
+              min(p.week_number), max(p.week_number)
+       from public.content_plans p
+       join public.classes cl on cl.id = p.class_id
+       where cl.term = $1 and cl.course_id is not null and nullif(btrim(p.unit_code), '') is not null
+       group by cl.course_id, cl.term, upper(btrim(p.unit_code))
+       on conflict (course_id, term, code) do nothing
+       returning id`,
+      [term],
+    ),
+  )
+  return c.json({ added: rows.length })
+})
+
+/** Copy every unit from one term into another, skipping units already there (admins only, by RLS). */
+api.post('/course-units/copy', async (c) => {
+  const { from, to } = await body(c)
+  if (!from || !to) throw new HttpError(400, 'Choose both terms')
+  const rows = await run(c, (sql) =>
+    sql(
+      `insert into public.course_units (course_id, term, code, title, start_week, end_week, notes, resources_url)
+       select course_id, $2, code, title, start_week, end_week, notes, resources_url
+       from public.course_units where term = $1
+       on conflict (course_id, term, code) do nothing
+       returning id`,
+      [from, to],
+    ),
+  )
+  return c.json({ added: rows.length })
+})
+
 api.get('/enrolments', async (c) => {
   const classId = c.req.query('class_id')
   return c.json(

@@ -37,7 +37,7 @@ The other 4 trainers and 39 students follow the pattern `first.last@example.com`
 | `npm run build:vercel` | Build, migrate and package for Vercel (see below) |
 | `npm run db:migrate` | Apply pending SQL migrations from `db/migrations` |
 | `npm run db:seed` / `db:reset` | Load the demo data / drop everything, migrate and seed |
-| `npm run test:rls` | 71 access-control checks through the API (run on fresh seed data) |
+| `npm run test:rls` | 81 access-control checks through the API (run on fresh seed data) |
 | `npm run user:password -- <email>` | Set a user's password from the terminal (hidden input, stored as a bcrypt hash) |
 
 ## Deploying for free
@@ -134,6 +134,7 @@ and UI only mirror it.
 | Content plans | Edit all | Read all, edit own classes | Read non-draft weeks of enrolled classes |
 | Users, courses, classes, enrolments | Full edit | Read | Own enrolments and classes |
 | Gradebook (student lists, results) | All classes | Own classes only | None |
+| Units per course and term | Full edit | Read | None |
 
 - A trainer's "own classes" are classes where they're the lead trainer (`classes.trainer_id`) or hold
   a non-cancelled shift (`public.teaches_class`).
@@ -179,6 +180,12 @@ and UI only mirror it.
   readable only by the class's trainers and admins, and composite foreign keys stop a result
   pairing one class's task with another class's student. It's separate from the paid marked
   assessments on invoices.
+- **Units:** under **Units**, admins list each course's units of competency per term (code, title,
+  first and last week, notes and an outline link). **Fill from content plans** builds a term's list
+  from the unit codes and weeks already in its classes' plans, and **Copy from term** starts a new
+  term from an earlier one. Trainers see the list read-only, and the unit code fields in content
+  plans and the gradebook suggest the class's units (a new plan week starts with the unit running
+  that week). Stored in `course_units`, one row per course, term and code.
 - **Term length:** content plans cover a 10-week term. To change it, update `TERM_WEEKS` in
   `src/lib/dates.ts` and the `content_plans_week_number_check` constraint (with a new migration).
 - **Duplicate plan:** `duplicate_content_plan()` runs with the caller's permissions, so RLS decides
@@ -192,6 +199,7 @@ and UI only mirror it.
   `week_number` to dates).
 - `roster_shifts.needs_cover` and `roster_shifts.notes`.
 - `class_students`, `class_tasks` and `task_results` for the gradebook.
+- `course_units` for each course's units per term.
 - `app.credentials` for password hashes; `created_at` / `updated_at` timestamps where useful.
 
 ## Project layout

@@ -58,6 +58,13 @@ const MESSAGE_BY_CONSTRAINT: Record<string, string> = {
   class_tasks_class_id_fkey: 'That class no longer exists',
   task_results_result_check: 'Choose a result',
   task_results_attempt_check: 'The attempt must be 1, 2 or 3',
+  course_units_term_check: 'Choose the term',
+  course_units_code_check: 'Add the unit code',
+  course_units_start_week_check: 'The first week must be between 1 and 10',
+  course_units_end_week_check: 'The last week must be between 1 and 10',
+  course_units_weeks_check: "The last week can't be before the first week",
+  course_units_unique: 'That unit is already listed for this course and term',
+  course_units_course_id_fkey: 'That course no longer exists',
   task_results_task_fkey: "That student isn't on this class's list",
   task_results_student_fkey: "That student isn't on this class's list",
 }
