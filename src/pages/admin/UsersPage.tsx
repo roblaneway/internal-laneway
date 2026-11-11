@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Loader2, Mail, ReceiptText, Search, Send, Trash2, Users } from 'lucide-react'
+import { Check, Copy, KeyRound, Loader2, Mail, ReceiptText, Search, Send, Trash2, Users } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -180,6 +180,7 @@ export function UsersPage() {
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
+              <TemporaryPasswordDialog user={p} disabled={p.id === me.id} />
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <Button variant="ghost" size="icon" disabled={p.id === me.id} aria-label={`Delete ${p.full_name}`}>
@@ -206,6 +207,94 @@ export function UsersPage() {
 
       {billingFor && <BillingDialog trainer={billingFor} canEditRate open onOpenChange={(open) => !open && setBillingFor(null)} />}
     </>
+  )
+}
+
+/**
+ * Sets a new temporary password and shows it once, for the admin to pass on in person
+ * or by message. The user must choose their own password when they sign in.
+ */
+function TemporaryPasswordDialog({ user, disabled }: { user: Profile; disabled: boolean }) {
+  const queryClient = useQueryClient()
+  const [open, setOpen] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  const reset = useMutation({
+    mutationFn: () => api.post<{ password: string; expires_at: string }>(`/profiles/${user.id}/temporary-password`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.pendingInvites }),
+    onError: (err) => toast.error(err.message),
+  })
+
+  const onOpenChange = (next: boolean) => {
+    setOpen(next)
+    // Forget the password once the dialog closes.
+    if (!next) {
+      reset.reset()
+      setCopied(false)
+    }
+  }
+
+  const copy = async () => {
+    if (!reset.data) return
+    try {
+      await navigator.clipboard.writeText(reset.data.password)
+      setCopied(true)
+    } catch {
+      toast.error("Couldn't copy. Select the password and copy it instead.")
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          disabled={disabled}
+          aria-label={`Set a temporary password for ${user.full_name}`}
+          title="Set a temporary password (no email)"
+        >
+          <KeyRound className="size-4" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Temporary password for {user.full_name}</DialogTitle>
+          <DialogDescription>
+            {reset.data
+              ? `Give this to ${user.full_name.split(/\s+/)[0]} privately. It's shown only once.`
+              : `This replaces ${user.email}'s current password with a new temporary one, without sending an email. It works for 7 days, and they'll choose their own password when they sign in.`}
+          </DialogDescription>
+        </DialogHeader>
+        {reset.data && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 rounded-md border bg-muted px-3 py-2">
+              <code className="flex-1 font-mono text-lg tracking-wide select-all">{reset.data.password}</code>
+              <Button variant="ghost" size="icon" onClick={copy} aria-label="Copy password">
+                {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Sign in with {user.email} · expires {formatTimestampDate(reset.data.expires_at)}
+            </p>
+          </div>
+        )}
+        <DialogFooter>
+          {reset.data ? (
+            <Button onClick={() => onOpenChange(false)}>Done</Button>
+          ) : (
+            <>
+              <Button variant="outline" onClick={() => onOpenChange(false)}>
+                Cancel
+              </Button>
+              <Button onClick={() => reset.mutate()} disabled={reset.isPending}>
+                {reset.isPending && <Loader2 className="size-4 animate-spin" />} Set temporary password
+              </Button>
+            </>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 

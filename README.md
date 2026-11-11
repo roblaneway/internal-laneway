@@ -37,7 +37,7 @@ The other 4 trainers and 39 students follow the pattern `first.last@example.com`
 | `npm run build:vercel` | Build, migrate and package for Vercel (see below) |
 | `npm run db:migrate` | Apply pending SQL migrations from `db/migrations` |
 | `npm run db:seed` / `db:reset` | Load the demo data / drop everything, migrate and seed |
-| `npm run test:rls` | 68 access-control checks through the API (run on fresh seed data) |
+| `npm run test:rls` | 71 access-control checks through the API (run on fresh seed data) |
 | `npm run user:password -- <email>` | Set a user's password from the terminal (hidden input, stored as a bcrypt hash) |
 
 ## Deploying for free
@@ -65,6 +65,10 @@ password later from the account menu. Emails go through [Resend](https://resend.
 2. Create an API key (**API Keys**, "Sending access" is enough) and set `RESEND_API_KEY` to it, and
    `MAIL_FROM="Laneway Education <portal@your-domain.com>"` (in Vercel: Settings → Environment
    Variables, then redeploy).
+
+Without email, an admin can press the key icon next to a user to set a temporary password and see it
+once, then pass it on privately. The same rules apply: it expires in 7 days and must be replaced at
+first sign-in.
 
 Without these, development prints invite emails in the API's console instead of sending them, and
 production shows an error rather than creating an account nobody can sign in to.

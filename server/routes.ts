@@ -96,6 +96,24 @@ api.post('/invites', async (c) => {
   return c.json(result, result.created ? 201 : 200)
 })
 
+/**
+ * Give a user a new temporary password without emailing it, for the admin to pass on
+ * (e.g. when email isn't set up). Same rules as an invite: admins only, expires in
+ * 7 days, and the user must choose their own password when they sign in.
+ */
+api.post('/profiles/:id/temporary-password', async (c) => {
+  const password = temporaryPassword()
+  const result = await run(c, async (sql) => {
+    const [profile] = await sql<{ email: string }>('select email from public.profiles where id = $1', [c.req.param('id')])
+    if (!profile) throw notFound()
+    const [invite] = await sql<{ user_id: string }>('select * from app.invite_user($1, null, null, $2)', [profile.email, password])
+    const [{ expires_at }] = await sql<{ expires_at: Date }>('select expires_at from app.pending_invites() where user_id = $1', [invite.user_id])
+    return { password, expires_at }
+  })
+  c.header('Cache-Control', 'no-store')
+  return c.json(result)
+})
+
 /** Users who haven't replaced their temporary password yet (admins only). */
 api.get('/invites/pending', async (c) => c.json(await run(c, (sql) => sql('select * from app.pending_invites()'))))
 

@@ -229,6 +229,12 @@ async function as(email: string, password = PASSWORD) {
   check('invite shows as pending', pendingList.data?.some((r: any) => r.user_id === invited.data?.profile?.id))
   const trainerPeek = await marcus.get('/invites/pending')
   check('trainer cannot list pending invites', trainerPeek.status === 403, `status ${trainerPeek.status}`)
+  const tempByTrainer = await marcus.post(`/profiles/${invited.data?.profile?.id}/temporary-password`)
+  check('trainer cannot set temporary passwords', tempByTrainer.status === 403, tempByTrainer.data?.error)
+  const temp1 = await admin.post(`/profiles/${invited.data?.profile?.id}/temporary-password`)
+  check('admin sets a temporary password', temp1.status === 200 && /^[\w]{4}-[\w]{4}-[\w]{4}$/.test(temp1.data?.password ?? ''), temp1.data?.error)
+  const tempLogin = await as(email, temp1.data?.password).then(() => true, () => false)
+  check('temporary password signs in', tempLogin)
   const self = await admin.post('/invites', { email: 'admin@example.com' })
   check("admin can't re-invite themselves", self.status === 400, self.data?.error)
 
