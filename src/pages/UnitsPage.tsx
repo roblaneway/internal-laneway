@@ -19,7 +19,7 @@ import { Card } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { EmptyState, ErrorState } from '@/components/EmptyState'
 import { ListSkeleton } from '@/components/ListSkeleton'
@@ -33,6 +33,12 @@ import { cn } from '@/lib/utils'
 import type { Course, CourseUnit } from '@/lib/types'
 
 const WEEKS = Array.from({ length: TERM_WEEKS }, (_, i) => i + 1)
+
+// Course areas by training package: ICT… qualifications are IT, BSB… are business.
+const AREAS = [
+  { value: 'area:it', label: 'All IT courses', prefix: 'ICT' },
+  { value: 'area:business', label: 'All business courses', prefix: 'BSB' },
+]
 
 /** The units each course delivers in a term. Admins edit; trainers read. */
 export function UnitsPage() {
@@ -71,6 +77,23 @@ export function UnitsPage() {
     )
   }, [courses.data, classes.data, myClasses.data, term, profile.role])
 
+  // "all", an area ("area:it") or one course's id.
+  const areas = AREAS.filter((a) => courses.data?.some((c) => c.code.toUpperCase().startsWith(a.prefix)))
+  const courseParam = params.get('course') ?? 'all'
+  const filter =
+    areas.some((a) => a.value === courseParam) || courses.data?.some((c) => c.id === courseParam) ? courseParam : 'all'
+  const area = AREAS.find((a) => a.value === filter)
+  const shownCourses = orderedCourses.filter((c) =>
+    filter === 'all' ? true : area ? c.code.toUpperCase().startsWith(area.prefix) : c.id === filter,
+  )
+  const setParam = (key: string, value: string) =>
+    setParams((prev) => {
+      const next = new URLSearchParams(prev)
+      if (key === 'course' && value === 'all') next.delete(key)
+      else next.set(key, value)
+      return next
+    })
+
   const fillFromPlans = useMutation({
     mutationFn: () => api.post<{ added: number }>('/course-units/from-plans', { term }),
     onSuccess: ({ added }) => {
@@ -83,7 +106,8 @@ export function UnitsPage() {
   const error = courses.error ?? classes.error ?? units.error
   if (error) return <ErrorState error={error} />
 
-  const termUnits = (units.data ?? []).filter((u) => u.term === term)
+  const shownIds = new Set(shownCourses.map((c) => c.id))
+  const termUnits = (units.data ?? []).filter((u) => u.term === term && shownIds.has(u.course_id))
 
   return (
     <>
@@ -119,16 +143,7 @@ export function UnitsPage() {
       ) : (
         <>
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center">
-            <Select
-              value={term}
-              onValueChange={(v) =>
-                setParams((prev) => {
-                  const next = new URLSearchParams(prev)
-                  next.set('term', v)
-                  return next
-                })
-              }
-            >
+            <Select value={term} onValueChange={(v) => setParam('term', v)}>
               <SelectTrigger className="w-full sm:w-60" aria-label="Term">
                 <SelectValue />
               </SelectTrigger>
@@ -141,13 +156,33 @@ export function UnitsPage() {
                 ))}
               </SelectContent>
             </Select>
+            <Select value={filter} onValueChange={(v) => setParam('course', v)}>
+              <SelectTrigger className="w-full sm:w-72" aria-label="Course">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All courses</SelectItem>
+                {areas.map((a) => (
+                  <SelectItem key={a.value} value={a.value}>
+                    {a.label}
+                  </SelectItem>
+                ))}
+                <SelectSeparator />
+                {orderedCourses.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <p className="text-sm text-muted-foreground">
-              {termUnits.length} {termUnits.length === 1 ? 'unit' : 'units'} across {new Set(termUnits.map((u) => u.course_id)).size} courses
+              {termUnits.length} {termUnits.length === 1 ? 'unit' : 'units'} across {new Set(termUnits.map((u) => u.course_id)).size} of{' '}
+              {shownCourses.length} {shownCourses.length === 1 ? 'course' : 'courses'}
             </p>
           </div>
 
           <div className="space-y-4">
-            {orderedCourses.map((course) => (
+            {shownCourses.map((course) => (
               <CourseUnits
                 key={course.id}
                 course={course}
