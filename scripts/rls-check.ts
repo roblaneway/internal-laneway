@@ -245,6 +245,34 @@ async function as(email: string, password = PASSWORD) {
   await pool.query("delete from public.course_units where term <> 'Term 4 2026'")
 }
 
+// Class preparation: trainers record their own, for classes they teach; admins anyone's
+{
+  const admin = await as('admin@example.com')
+  const marcus = await as('trainer@example.com') // leads class 1
+  const aiko = await as('aiko.tanaka@example.com') // leads class 3, not class 1
+  const own = await marcus.get('/class-preparation')
+  check('trainer reads own class prep', own.status === 200 && own.data.length === 7 && own.data.every((p: any) => p.trainer_id === marcus.id), `saw ${own.data?.length}`)
+  const peek = await aiko.get('/class-preparation', { trainer_id: marcus.id })
+  check("trainer cannot read another trainer's prep", peek.status === 200 && peek.data.length === 0, `saw ${peek.data?.length}`)
+  const set = await marcus.put('/class-preparation', { class_id: CLASS(1), week_number: 9, hours: 1.25, notes: 'Final presentation rubric' })
+  check('trainer records prep for own class', set.status === 200 && Number(set.data.hours) === 1.25 && set.data.trainer_id === marcus.id, set.data?.error)
+  const again = await marcus.put('/class-preparation', { class_id: CLASS(1), week_number: 9, hours: 2 })
+  check("saving a week again updates it", again.status === 200 && again.data.id === set.data.id && Number(again.data.hours) === 2, again.data?.error)
+  const elsewhere = await aiko.put('/class-preparation', { class_id: CLASS(1), week_number: 9, hours: 1 })
+  check("trainer cannot record prep for a class they don't teach", elsewhere.status === 403, elsewhere.data?.error)
+  const forOther = await aiko.put('/class-preparation', { trainer_id: marcus.id, class_id: CLASS(3), week_number: 9, hours: 1 })
+  check('trainer cannot record prep for someone else', forOther.status === 403, forOther.data?.error)
+  const tooMuch = await marcus.put('/class-preparation', { class_id: CLASS(1), week_number: 9, hours: 30 })
+  check('prep hours over 24 are rejected', tooMuch.status === 400, tooMuch.data?.error)
+  const removeOther = await aiko.del(`/class-preparation/${set.data.id}`)
+  check("trainer cannot remove another trainer's prep", removeOther.status === 404, `status ${removeOther.status}`)
+  const byAdmin = await admin.put('/class-preparation', { trainer_id: marcus.id, class_id: CLASS(1), week_number: 10, hours: 1 })
+  check('admin records prep for a trainer', byAdmin.status === 200 && byAdmin.data.trainer_id === marcus.id, byAdmin.data?.error)
+  const removed = await marcus.del(`/class-preparation/${set.data.id}`)
+  check('trainer removes own prep', removed.status === 204, `status ${removed.status}`)
+  await pool.query('delete from public.class_preparation where week_number >= 9')
+}
+
 // Email invites: temporary passwords expire and must be replaced before using the API
 {
   const admin = await as('admin@example.com')

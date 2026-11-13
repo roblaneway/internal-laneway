@@ -422,6 +422,44 @@ api.get('/marked-assessments', async (c) => {
 // trainer_id defaults to the signed-in user; only admins can record marking for someone else (RLS).
 crud('/marked-assessments', 'marked_assessments', ['trainer_id', 'marked_on', 'activity', 'unit_code', 'term', 'course', 'kind', 'quantity'])
 
+// --- Class preparation --------------------------------------------------------
+// Prep hours per class per term week. Trainers see and record their own (for classes
+// they teach); admins manage everyone's (RLS).
+
+api.get('/class-preparation', async (c) => {
+  const trainerId = c.req.query('trainer_id')
+  return c.json(
+    await run(c, (sql) =>
+      trainerId
+        ? sql('select * from public.class_preparation where trainer_id = $1 order by class_id, week_number', [trainerId])
+        : sql('select * from public.class_preparation order by trainer_id, class_id, week_number'),
+    ),
+  )
+})
+
+/** Set a week's prep hours for a class; trainer_id defaults to the signed-in user. */
+api.put('/class-preparation', async (c) => {
+  const { trainer_id, class_id, week_number, hours, notes } = await body(c)
+  if (!class_id || !week_number) throw new HttpError(400, 'Choose the class and week')
+  if (hours === undefined || hours === null || hours === '') throw new HttpError(400, 'Enter the hours')
+  const [row] = await run(c, (sql) =>
+    sql(
+      `insert into public.class_preparation (trainer_id, class_id, week_number, hours, notes)
+       values (coalesce($1::uuid, app.user_id()), $2, $3, $4, nullif(btrim($5), ''))
+       on conflict (trainer_id, class_id, week_number)
+       do update set hours = excluded.hours, notes = excluded.notes
+       returning *`,
+      [trainer_id || null, class_id, week_number, hours, notes ?? ''],
+    ),
+  )
+  return c.json(row)
+})
+
+api.delete('/class-preparation/:id', async (c) => {
+  if (!(await run(c, (sql) => deleteRow(sql, 'class_preparation', c.req.param('id'))))) throw notFound()
+  return c.body(null, 204)
+})
+
 // --- Gradebook ---------------------------------------------------------------
 // The class's trainers and admins only (RLS); anyone else sees an empty gradebook.
 

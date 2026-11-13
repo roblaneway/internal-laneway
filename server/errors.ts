@@ -65,6 +65,10 @@ const MESSAGE_BY_CONSTRAINT: Record<string, string> = {
   course_units_weeks_check: "The last week can't be before the first week",
   course_units_unique: 'That unit is already listed for this course and term',
   course_units_course_id_fkey: 'That course no longer exists',
+  class_preparation_week_check: 'The week must be between 1 and 10',
+  class_preparation_hours_check: 'Prep hours must be more than 0 and at most 24',
+  class_preparation_class_id_fkey: 'That class no longer exists',
+  class_preparation_trainer_id_fkey: 'That trainer no longer exists',
   task_results_task_fkey: "That student isn't on this class's list",
   task_results_student_fkey: "That student isn't on this class's list",
 }

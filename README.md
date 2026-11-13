@@ -37,7 +37,7 @@ The other 4 trainers and 39 students follow the pattern `first.last@example.com`
 | `npm run build:vercel` | Build, migrate and package for Vercel (see below) |
 | `npm run db:migrate` | Apply pending SQL migrations from `db/migrations` |
 | `npm run db:seed` / `db:reset` | Load the demo data / drop everything, migrate and seed |
-| `npm run test:rls` | 81 access-control checks through the API (run on fresh seed data) |
+| `npm run test:rls` | 91 access-control checks through the API (run on fresh seed data) |
 | `npm run user:password -- <email>` | Set a user's password from the terminal (hidden input, stored as a bcrypt hash) |
 
 ## Deploying for free
@@ -135,6 +135,7 @@ and UI only mirror it.
 | Users, courses, classes, enrolments | Full edit | Read | Own enrolments and classes |
 | Gradebook (student lists, results) | All classes | Own classes only | None |
 | Units per course and term | Full edit | Read | None |
+| Class preparation hours | Everyone's | Own, for classes they teach | None |
 
 - A trainer's "own classes" are classes where they're the lead trainer (`classes.trainer_id`) or hold
   a non-cancelled shift (`public.teaches_class`).
@@ -172,6 +173,11 @@ and UI only mirror it.
 - **Assessments:** trainers record the assessments and reassessments they mark (activity, unit,
   course, term, quantity, date) under **My assessments**. Each entry is paid on the invoice for the
   fortnight it was marked in. `marked_assessments` is private to the trainer and admins.
+- **Class preparation:** under **My class prep**, trainers log the hours they spent preparing each
+  class in each term week (a grid of their classes × weeks 1–10, with optional notes). The invoice for
+  the fortnight a week starts in gets a "Class preparation" line per class at the hourly rate, and
+  the spreadsheet lists each week under extra activities. Admins see and edit any trainer's prep.
+  `class_preparation` is private to the trainer and admins.
 - **Gradebook:** under **Gradebook**, a class's trainers keep their own student list (pasted one per
   line, optionally with a student ID; no portal accounts needed) and record a result for each
   assessment (S, NYS, not submitted) and presentation (S, NYS, absent, rescheduled), with the attempt,
@@ -200,6 +206,7 @@ and UI only mirror it.
 - `roster_shifts.needs_cover` and `roster_shifts.notes`.
 - `class_students`, `class_tasks` and `task_results` for the gradebook.
 - `course_units` for each course's units per term.
+- `class_preparation` for prep hours per trainer, class and term week.
 - `app.credentials` for password hashes; `created_at` / `updated_at` timestamps where useful.
 
 ## Project layout

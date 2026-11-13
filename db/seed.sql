@@ -278,3 +278,15 @@ from public.content_plans p
 join public.classes cl on cl.id = p.class_id
 where p.unit_code is not null
 group by cl.course_id, cl.term, p.unit_code;
+
+-- ---------------------------------------------------------------------------
+-- Class preparation: the Tuesday class's lead trainer logged prep for weeks 1–8.
+-- ---------------------------------------------------------------------------
+insert into public.class_preparation (trainer_id, class_id, week_number, hours, notes)
+select cl.trainer_id, cl.id, w.week, w.hours, w.notes
+from public.classes cl
+cross join (values
+  (1, 2.0, 'Term set-up and Assessment 1 brief'), (2, 1.0, null), (3, 1.0, null), (4, 1.5, null),
+  (5, 1.0, null), (6, 2.0, 'Bootstrap project brief'), (8, 1.5, 'JavaScript slides')
+) as w(week, hours, notes)
+where cl.id = 'e0000000-0000-4000-8000-000000000001';

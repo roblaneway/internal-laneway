@@ -4,7 +4,7 @@ import { fileDate, invoiceDescription, invoiceEnd, type Invoice } from '@/lib/in
 import type { Profile } from '@/lib/types'
 
 // Laneway's invoice spreadsheet: a block per roster week, then extra activities
-// (marked assessments), then the invoice total. Totals are formulas so the
+// (class preparation and marked assessments), then the invoice total. Totals are formulas so the
 // trainer can still adjust hours or prices in Excel; each also carries its
 // computed result so previews that don't recalculate still show the numbers.
 
@@ -143,13 +143,30 @@ export async function downloadInvoiceSpreadsheet({
   headerRow(ws, row + 1, { A: 'Activity', B: 'Number', C: 'Course', F: 'Qtd', G: 'Price', H: 'TOTAL' })
   const first = row + 2
   const assessmentRate = invoice.assessmentRateCents === null ? null : invoice.assessmentRateCents / 100
-  const last = first + Math.max(EXTRA_ROWS, invoice.assessments.length) - 1
+  const prepEntries = invoice.prepLines.flatMap((line) => line.entries.map((entry) => ({ line, entry })))
+  const last = first + Math.max(EXTRA_ROWS, prepEntries.length + invoice.assessments.length) - 1
   for (let r = first; r <= last; r++) {
     styleRow(ws, r, ROW)
     for (const col of 'GH') ws.getCell(`${col}${r}`).numFmt = MONEY
   }
-  invoice.assessments.forEach((a, i) => {
+  prepEntries.forEach(({ line, entry }, i) => {
     const r = first + i
+    const values: Record<string, ExcelJSValue> = {
+      A: 'Class preparation',
+      B: `Week ${entry.week}`,
+      C: line.cls?.term ?? '',
+      D: line.description,
+      E: entry.notes ?? '',
+      F: entry.hours,
+      G: rate,
+      H: { formula: `F${r}*G${r}`, result: rate === null ? 0 : round2(entry.hours * rate) },
+    }
+    for (const [col, value] of Object.entries(values)) ws.getCell(`${col}${r}`).value = value
+    ws.getCell(`D${r}`).alignment = { horizontal: 'center' }
+    for (const col of 'FGH') ws.getCell(`${col}${r}`).alignment = { horizontal: 'right' }
+  })
+  invoice.assessments.forEach((a, i) => {
+    const r = first + prepEntries.length + i
     const values: Record<string, ExcelJSValue> = {
       A: a.activity,
       B: a.unit_code,
@@ -164,8 +181,8 @@ export async function downloadInvoiceSpreadsheet({
     ws.getCell(`D${r}`).alignment = { horizontal: 'center' }
     for (const col of 'FGH') ws.getCell(`${col}${r}`).alignment = { horizontal: 'right' }
   })
-  const extra = assessmentRate === null ? 0 : invoice.assessmentCount * assessmentRate
-  totalRow(ws, last + 1, 'TOTAL EXTRA', first, last, { count: invoice.assessmentCount, amount: extra })
+  const extra = (assessmentRate === null ? 0 : invoice.assessmentCount * assessmentRate) + (rate === null ? 0 : invoice.prepHours * rate)
+  totalRow(ws, last + 1, 'TOTAL EXTRA', first, last, { count: invoice.assessmentCount + invoice.prepHours, amount: extra })
   grandTotal += extra
   ws.getCell(`F${last + 1}`).alignment = { horizontal: 'right' }
   totalCells.push(`H${last + 1}`)

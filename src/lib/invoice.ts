@@ -1,6 +1,6 @@
 import { addDays, diffDays, termWeek } from '@/lib/dates'
 import { deliveringTrainerId, isUncovered } from '@/components/roster/ShiftListItem'
-import type { ClassWithCourse, MarkedAssessment, Profile, Shift, TrainerBilling } from '@/lib/types'
+import type { ClassPreparation, ClassWithCourse, MarkedAssessment, Profile, Shift, TrainerBilling } from '@/lib/types'
 
 /** Who trainers invoice. */
 export const BILL_TO = { name: 'Laneway Education', address: 'Level 3/201 Fitzroy St, St Kilda VIC 3182' }
@@ -33,6 +33,17 @@ export interface InvoiceLine {
   amount: number | null
 }
 
+/** Class preparation hours for one class in the fortnight, paid at the hourly rate. */
+export interface InvoicePrepLine {
+  classId: string
+  description: string
+  cls: ClassWithCourse | undefined
+  entries: { week: number; start: string; hours: number; notes: string | null }[]
+  weeks: number[]
+  hours: number
+  amount: number | null
+}
+
 /** One roster week of the fortnight, as on the invoice spreadsheet. */
 export interface InvoiceWeek {
   start: string
@@ -48,6 +59,8 @@ export interface Invoice {
   weekNumbers: number[]
   hours: number
   rateCents: number | null
+  prepLines: InvoicePrepLine[]
+  prepHours: number
   assessments: MarkedAssessment[]
   assessmentCount: number
   assessmentRateCents: number | null
@@ -93,6 +106,7 @@ export function buildInvoice({
   shifts,
   classes,
   assessments,
+  preparation = [],
   from,
   today,
 }: {
@@ -101,6 +115,7 @@ export function buildInvoice({
   shifts: Shift[]
   classes: ClassWithCourse[]
   assessments: MarkedAssessment[]
+  preparation?: ClassPreparation[]
   from: string
   today: string
 }): Invoice {
@@ -144,6 +159,33 @@ export function buildInvoice({
     return { start, number, sessions: inWeek }
   })
 
+  // Prep for a term week is paid in the fortnight that week starts in, in the same class order.
+  const lineOrder = new Map(lines.map((l, i) => [l.classId, i]))
+  const prepByClass = new Map<string, InvoicePrepLine['entries']>()
+  for (const p of preparation) {
+    const cls = classById.get(p.class_id)
+    if (p.trainer_id !== trainer.id || !cls) continue
+    const start = addDays(cls.start_date, (p.week_number - 1) * 7)
+    if (start < from || start > to) continue
+    prepByClass.set(p.class_id, [...(prepByClass.get(p.class_id) ?? []), { week: p.week_number, start, hours: Number(p.hours), notes: p.notes }])
+  }
+  const prepLines: InvoicePrepLine[] = [...prepByClass]
+    .sort(([a], [b]) => (lineOrder.get(a) ?? Infinity) - (lineOrder.get(b) ?? Infinity))
+    .map(([classId, entries]) => {
+      const cls = classById.get(classId)
+      const hours = entries.reduce((sum, e) => sum + e.hours, 0)
+      return {
+        classId,
+        cls,
+        description: invoiceDescription(cls),
+        entries: entries.sort((a, b) => a.week - b.week),
+        weeks: uniqueSorted(entries.map((e) => e.week)),
+        hours,
+        amount: rateCents === null ? null : Math.round(hours * rateCents),
+      }
+    })
+  const prepHours = prepLines.reduce((sum, l) => sum + l.hours, 0)
+
   const marked = assessments
     .filter((a) => a.trainer_id === trainer.id && a.marked_on >= from && a.marked_on <= to)
     .sort((a, b) => a.marked_on.localeCompare(b.marked_on) || a.created_at.localeCompare(b.created_at))
@@ -151,7 +193,12 @@ export function buildInvoice({
   const assessmentRateCents = toCents(billing?.assessment_rate)
   const assessmentAmount = assessmentCount === 0 ? 0 : assessmentRateCents === null ? null : assessmentCount * assessmentRateCents
 
-  const classTotal = rateCents === null ? (sessions.length ? null : 0) : lines.reduce((sum, l) => sum + l.amount!, 0)
+  const classTotal =
+    rateCents === null
+      ? sessions.length || prepLines.length
+        ? null
+        : 0
+      : lines.reduce((sum, l) => sum + l.amount!, 0) + prepLines.reduce((sum, l) => sum + l.amount!, 0)
   const subtotal = classTotal === null || assessmentAmount === null ? null : classTotal + assessmentAmount
   const gst = subtotal === null ? null : billing?.gst_registered ? Math.round(subtotal * GST_RATE) : 0
 
@@ -161,6 +208,8 @@ export function buildInvoice({
     weekNumbers: uniqueSorted(weeks.map((w) => w.number)),
     hours: sessions.reduce((sum, s) => sum + s.hours, 0),
     rateCents,
+    prepLines,
+    prepHours,
     assessments: marked,
     assessmentCount,
     assessmentRateCents,

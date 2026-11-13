@@ -4,6 +4,7 @@ import { api } from '@/lib/api'
 import { useProfile } from '@/auth/AuthProvider'
 import type {
   Announcement,
+  ClassPreparation,
   ClassWithCourse,
   ContentPlan,
   Course,
@@ -36,6 +37,8 @@ export const keys = {
   pendingInvites: ['invites', 'pending'] as const,
   gradebook: (classId: string) => ['gradebook', classId] as const,
   courseUnits: ['course-units'] as const,
+  preparation: (trainerId: string) => ['class-preparation', trainerId] as const,
+  allPreparation: ['class-preparation'] as const,
   assessments: (from: string, to: string, trainerId: string) => ['marked-assessments', from, to, trainerId] as const,
 }
 
@@ -148,6 +151,15 @@ export function useMarkedAssessments(from: string, to: string, trainerId = '') {
     queryKey: keys.assessments(from, to, trainerId),
     queryFn: () =>
       api.get<MarkedAssessment[]>('/marked-assessments', { from, to, ...(trainerId && { trainer_id: trainerId }) }),
+  })
+}
+
+/** A trainer's class prep hours for every class and week (their own, or anyone's for admins). */
+export function useClassPreparation(trainerId: string) {
+  return useQuery({
+    queryKey: keys.preparation(trainerId),
+    enabled: Boolean(trainerId),
+    queryFn: () => api.get<ClassPreparation[]>('/class-preparation', { trainer_id: trainerId }),
   })
 }
 

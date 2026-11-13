@@ -11,6 +11,7 @@ const RosterPage = lazy(() => import('@/pages/RosterPage').then((m) => ({ defaul
 const InvoicePage = lazy(() => import('@/pages/InvoicePage').then((m) => ({ default: m.InvoicePage })))
 const AssessmentsPage = lazy(() => import('@/pages/AssessmentsPage').then((m) => ({ default: m.AssessmentsPage })))
 const GradebookPage = lazy(() => import('@/pages/GradebookPage').then((m) => ({ default: m.GradebookPage })))
+const PreparationPage = lazy(() => import('@/pages/PreparationPage').then((m) => ({ default: m.PreparationPage })))
 const UnitsPage = lazy(() => import('@/pages/UnitsPage').then((m) => ({ default: m.UnitsPage })))
 const TimetablePage = lazy(() => import('@/pages/TimetablePage').then((m) => ({ default: m.TimetablePage })))
 const AnnouncementsPage = lazy(() => import('@/pages/AnnouncementsPage').then((m) => ({ default: m.AnnouncementsPage })))
@@ -44,6 +45,7 @@ export default function App() {
             <Route path="assessments" element={<AssessmentsPage />} />
             <Route path="gradebook" element={<GradebookPage />} />
             <Route path="units" element={<UnitsPage />} />
+            <Route path="preparation" element={<PreparationPage />} />
           </Route>
           <Route path="admin" element={<RequireRole roles={['admin']} />}>
             <Route index element={<Navigate to="users" replace />} />

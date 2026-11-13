@@ -127,6 +127,19 @@ export interface MarkedAssessment {
   updated_at: string
 }
 
+/** Hours a trainer spent preparing a class in a term week, paid at their hourly rate. */
+export interface ClassPreparation {
+  id: string
+  trainer_id: string
+  class_id: string
+  week_number: number
+  /** numeric, as a string */
+  hours: string
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
 /** A student on a trainer's list for a class (not necessarily a portal user). */
 export interface ClassStudent {
   id: string

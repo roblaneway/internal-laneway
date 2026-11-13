@@ -14,6 +14,7 @@ import { BillingDialog } from '@/components/roster/BillingDialog'
 import {
   useAllContentPlans,
   useClasses,
+  useClassPreparation,
   useMarkedAssessments,
   useProfileMap,
   useProfiles,
@@ -60,6 +61,7 @@ export function InvoicePage() {
   const shifts = useShifts(from, to)
   const classes = useClasses()
   const assessments = useMarkedAssessments(from, to, trainerId)
+  const preparation = useClassPreparation(trainerId)
   const plans = useAllContentPlans()
   const [editing, setEditing] = useState(false)
   const [exporting, setExporting] = useState(false)
@@ -67,9 +69,9 @@ export function InvoicePage() {
   const topics = useMemo(() => new Map((plans.data ?? []).map((p) => [`${p.class_id}:${p.week_number}`, p.topic])), [plans.data])
 
   const backTo = `/roster?${new URLSearchParams({ range: 'month', month: from.slice(0, 7), ...(isAdmin && { trainer: trainerId }) })}`
-  const error = shifts.error ?? billing.error ?? assessments.error ?? classes.error
+  const error = shifts.error ?? billing.error ?? assessments.error ?? classes.error ?? preparation.error
   if (error) return <ErrorState error={error} />
-  if (profilesQuery.isPending || billing.isPending || shifts.isPending || classes.isPending || assessments.isPending) {
+  if (profilesQuery.isPending || billing.isPending || shifts.isPending || classes.isPending || assessments.isPending || (Boolean(trainerId) && preparation.isPending)) {
     return <Skeleton className="h-[40rem] w-full" />
   }
   if (!trainer) {
@@ -94,6 +96,7 @@ export function InvoicePage() {
     shifts: shifts.data ?? [],
     classes: classes.data ?? [],
     assessments: assessments.data ?? [],
+    preparation: preparation.data ?? [],
     from,
     today,
   })
@@ -227,7 +230,7 @@ export function InvoicePage() {
             </tr>
           </thead>
           <tbody className={TEXT}>
-            {invoice.lines.length === 0 && invoice.assessmentCount === 0 ? (
+            {invoice.lines.length === 0 && invoice.prepLines.length === 0 && invoice.assessmentCount === 0 ? (
               <tr className="border-b border-neutral-900">
                 <td colSpan={4} className="py-5 text-center text-neutral-500">
                   No sessions or assessments in this fortnight.
@@ -238,6 +241,14 @@ export function InvoicePage() {
                 {invoice.lines.map((line) => (
                   <tr key={line.classId} className="border-b border-neutral-900">
                     <td className="py-5 pr-2">{line.description}</td>
+                    <td className="py-5 text-center whitespace-nowrap">{formatRate(invoice.rateCents)}/hr</td>
+                    <td className="py-5 text-center">{formatWeeks(line.weeks)}</td>
+                    <td className="py-5 text-right">{formatMoney(line.amount)}</td>
+                  </tr>
+                ))}
+                {invoice.prepLines.map((line) => (
+                  <tr key={`prep-${line.classId}`} className="border-b border-neutral-900">
+                    <td className="py-5 pr-2">Class preparation · {line.description}</td>
                     <td className="py-5 text-center whitespace-nowrap">{formatRate(invoice.rateCents)}/hr</td>
                     <td className="py-5 text-center">{formatWeeks(line.weeks)}</td>
                     <td className="py-5 text-right">{formatMoney(line.amount)}</td>
