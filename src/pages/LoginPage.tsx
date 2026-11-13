@@ -133,7 +133,7 @@ export function LoginPage() {
       </main>
 
       <footer className="border-t bg-card px-4 py-4 text-center text-xs text-muted-foreground">
-        Demo environment: all people and data shown are fictional.
+        © {new Date().getFullYear()} Laneway Education · Fitzroy St Campus, St Kilda
       </footer>
     </div>
   )

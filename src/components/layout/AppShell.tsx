@@ -13,6 +13,7 @@ import {
   Megaphone,
   Menu,
   NotebookPen,
+  NotebookTabs,
   Bell,
   School,
   Users,
@@ -52,6 +53,8 @@ const NAV: { heading?: string; items: NavItem[] }[] = [
       { to: '/roster', label: 'My roster', icon: CalendarDays, roles: ['trainer'] },
       { to: '/assessments', label: 'Assessments', icon: ClipboardCheck, roles: ['admin'] },
       { to: '/assessments', label: 'My assessments', icon: ClipboardCheck, roles: ['trainer'] },
+      { to: '/preparation', label: 'Class prep', icon: NotebookTabs, roles: ['admin'] },
+      { to: '/preparation', label: 'My class prep', icon: NotebookTabs, roles: ['trainer'] },
       { to: '/gradebook', label: 'Gradebook', icon: NotebookPen, roles: ['admin', 'trainer'] },
       { to: '/units', label: 'Units', icon: Library, roles: ['admin', 'trainer'] },
       { to: '/classes', label: 'My classes', icon: BookOpen, roles: ['trainer', 'student'] },
@@ -222,10 +225,7 @@ export function AppShell() {
       </div>
 
       <footer className="border-t bg-card print:hidden px-4 py-4 text-xs text-muted-foreground lg:px-8">
-        <div className="mx-auto flex max-w-7xl flex-col gap-1 sm:flex-row sm:justify-between">
-          <span>© {new Date().getFullYear()} Laneway Education · Fitzroy St Campus, St Kilda</span>
-          <span>Demo environment: all people and data shown are fictional.</span>
-        </div>
+        <div className="mx-auto max-w-7xl">© {new Date().getFullYear()} Laneway Education · Fitzroy St Campus, St Kilda</div>
       </footer>
     </div>
   )
