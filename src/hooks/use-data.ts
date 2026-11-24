@@ -4,6 +4,7 @@ import { api } from '@/lib/api'
 import { useProfile } from '@/auth/AuthProvider'
 import type {
   Announcement,
+  AssessmentPlanRow,
   ClassPreparation,
   ClassWithCourse,
   ContentPlan,
@@ -40,6 +41,7 @@ export const keys = {
   preparation: (trainerId: string) => ['class-preparation', trainerId] as const,
   allPreparation: ['class-preparation'] as const,
   assessments: (from: string, to: string, trainerId: string) => ['marked-assessments', from, to, trainerId] as const,
+  assessmentPlan: (term: string, trainerId: string) => ['marked-assessments', 'plan', term, trainerId] as const,
 }
 
 export function useCourses() {
@@ -145,12 +147,21 @@ export function useTrainerBilling(trainerId: string | undefined) {
   })
 }
 
-/** Assessments marked between two dates, for one trainer or (admins, with '') everyone. */
+/** Assessments that became ready to invoice between two dates, for one trainer or (admins, with '') everyone. */
 export function useMarkedAssessments(from: string, to: string, trainerId = '') {
   return useQuery({
     queryKey: keys.assessments(from, to, trainerId),
     queryFn: () =>
       api.get<MarkedAssessment[]>('/marked-assessments', { from, to, ...(trainerId && { trainer_id: trainerId }) }),
+  })
+}
+
+/** A trainer's assessment plan for a term, with each row's marking. */
+export function useAssessmentPlan(term: string | undefined, trainerId: string) {
+  return useQuery({
+    queryKey: keys.assessmentPlan(term ?? '', trainerId),
+    enabled: Boolean(term && trainerId),
+    queryFn: () => api.get<AssessmentPlanRow[]>('/assessment-plan', { term: term!, trainer_id: trainerId }),
   })
 }
 

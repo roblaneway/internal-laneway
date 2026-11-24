@@ -112,7 +112,10 @@ export interface TrainerBilling {
 
 export type AssessmentKind = 'Assessment' | 'Reassessment'
 
-/** Assessments a trainer marked, billed on the invoice for the fortnight of `marked_on`. */
+/** 'marked': done but not invoiced yet; 'ready': on the invoice for the fortnight of `ready_on`. */
+export type MarkingStatus = 'marked' | 'ready'
+
+/** Assessments a trainer marked, billed once ready on the invoice for the fortnight of `ready_on`. */
 export interface MarkedAssessment {
   id: string
   trainer_id: string
@@ -123,8 +126,28 @@ export interface MarkedAssessment {
   course: string
   kind: AssessmentKind
   quantity: number
+  status: MarkingStatus
+  ready_on: string | null
+  /** Set when recorded from the trainer's term assessment plan. */
+  plan_id: string | null
   created_at: string
   updated_at: string
+}
+
+/** A unit's assessment in a trainer's term plan, with its marking (at most one per kind). */
+export interface AssessmentPlanRow {
+  id: string
+  trainer_id: string
+  term: string
+  course: string
+  unit_code: string
+  activity: string
+  due_on: string | null
+  review_by: string | null
+  notes: string | null
+  created_at: string
+  updated_at: string
+  markings: MarkedAssessment[]
 }
 
 /** Hours a trainer spent preparing a class in a term week, paid at their hourly rate. */
