@@ -10,6 +10,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { AssessmentPlan } from '@/components/assessments/AssessmentPlan'
 import { EmptyState, ErrorState } from '@/components/EmptyState'
 import { ListSkeleton } from '@/components/ListSkeleton'
 import { PageHeader } from '@/components/PageHeader'
@@ -23,8 +25,43 @@ import type { AssessmentKind, MarkedAssessment } from '@/lib/types'
 const ALL = 'all'
 const KINDS: AssessmentKind[] = ['Reassessment', 'Assessment']
 
-/** Assessments trainers marked. Each fortnight's entries go on that fortnight's invoice. */
+type View = 'plan' | 'fortnight'
+
+/**
+ * Assessments trainers mark: a term plan of each unit's assessments (how many marked, and whether
+ * they're ready for the next invoice), and each fortnight's invoice view of what became ready.
+ */
 export function AssessmentsPage() {
+  const [params, setParams] = useSearchParams()
+  // Links from an invoice carry its fortnight, so they open that view.
+  const view: View = params.get('view') === 'fortnight' || (!params.get('view') && params.has('from')) ? 'fortnight' : 'plan'
+  const setView = (v: string) =>
+    setParams((prev) => {
+      const next = new URLSearchParams(prev)
+      next.set('view', v)
+      if (v === 'plan' && next.get('trainer') === ALL) next.delete('trainer')
+      return next
+    })
+
+  return (
+    <>
+      <PageHeader
+        title="Assessments"
+        description="Plan each term's assessments and record how many you marked. Set them to Ready and they go on the next invoice."
+      />
+      <Tabs value={view} onValueChange={setView} className="mb-4">
+        <TabsList>
+          <TabsTrigger value="plan">Term plan</TabsTrigger>
+          <TabsTrigger value="fortnight">On the invoice</TabsTrigger>
+        </TabsList>
+      </Tabs>
+      {view === 'plan' ? <AssessmentPlan /> : <FortnightAssessments />}
+    </>
+  )
+}
+
+/** Assessments that became ready in a fortnight, so are paid on that fortnight's invoice. */
+function FortnightAssessments() {
   const me = useProfile()
   const isAdmin = me.role === 'admin'
   const [params, setParams] = useSearchParams()
@@ -67,25 +104,6 @@ export function AssessmentsPage() {
 
   return (
     <>
-      <PageHeader
-        title="Assessments"
-        description="Assessments and reassessments marked. Each one is paid on the invoice for the fortnight it was marked in."
-        actions={
-          <>
-            {invoiceLink && (
-              <Button asChild variant="outline">
-                <Link to={invoiceLink}>
-                  <FileText className="size-4" /> Open invoice
-                </Link>
-              </Button>
-            )}
-            <Button onClick={() => setEditing('new')}>
-              <Plus className="size-4" /> Add marked assessment
-            </Button>
-          </>
-        }
-      />
-
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="flex items-center gap-1">
           <Button variant="outline" size="icon" aria-label="Previous fortnight" onClick={() => setParam({ from: addDays(from, -INVOICE_DAYS) })}>
@@ -113,6 +131,18 @@ export function AssessmentsPage() {
             </SelectContent>
           </Select>
         )}
+        <div className={isAdmin ? 'flex w-full gap-2 sm:w-auto' : 'ml-auto flex w-full gap-2 sm:w-auto'}>
+          {invoiceLink && (
+            <Button asChild variant="outline" className="flex-1 sm:flex-none">
+              <Link to={invoiceLink}>
+                <FileText className="size-4" /> Open invoice
+              </Link>
+            </Button>
+          )}
+          <Button className="flex-1 sm:flex-none" onClick={() => setEditing('new')}>
+            <Plus className="size-4" /> Add other marking
+          </Button>
+        </div>
       </div>
 
       {assessments.error ? (
@@ -122,8 +152,8 @@ export function AssessmentsPage() {
       ) : !rows.length ? (
         <EmptyState
           icon={ClipboardCheck}
-          title="Nothing marked in this fortnight"
-          description="Add the assessments you mark and they'll appear on your invoice."
+          title="Nothing ready in this fortnight"
+          description="Set marked assessments to Ready in the term plan and they'll appear on that fortnight's invoice."
         />
       ) : (
         <>
@@ -142,13 +172,17 @@ export function AssessmentsPage() {
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {a.course}
-                    {a.term && ` · ${a.term}`} · marked {formatDayDate(a.marked_on)}
+                    {a.term && ` · ${a.term}`} · {a.plan_id && a.ready_on ? `ready ${formatDayDate(a.ready_on)}` : `marked ${formatDayDate(a.marked_on)}`}
+                    {a.plan_id && ' · from the term plan'}
                     {isAdmin && trainerFilter === ALL && ` · ${profiles.get(a.trainer_id)?.full_name ?? 'Unknown trainer'}`}
                   </p>
                 </div>
-                <Button variant="ghost" size="icon" aria-label={`Edit ${a.activity} ${a.unit_code}`} onClick={() => setEditing(a)}>
-                  <Pencil className="size-4" />
-                </Button>
+                {/* Term plan entries are changed in the plan, so they stay in step with it. */}
+                {!a.plan_id && (
+                  <Button variant="ghost" size="icon" aria-label={`Edit ${a.activity} ${a.unit_code}`} onClick={() => setEditing(a)}>
+                    <Pencil className="size-4" />
+                  </Button>
+                )}
                 <Button
                   variant="ghost"
                   size="icon"
@@ -162,7 +196,7 @@ export function AssessmentsPage() {
             ))}
           </Card>
           <p className="mt-3 text-right text-sm text-muted-foreground">
-            {total} {total === 1 ? 'assessment' : 'assessments'} in this fortnight
+            {total} {total === 1 ? 'assessment' : 'assessments'} on this fortnight's invoice
           </p>
         </>
       )}
@@ -226,6 +260,9 @@ function AssessmentForm({
         course: course.trim(),
         kind,
         quantity: Number(quantity),
+        // Marking added here is paid in the fortnight of the date marked.
+        status: 'ready',
+        ready_on: markedOn,
       }
       if (assessment) await api.patch(`/marked-assessments/${assessment.id}`, row)
       else await api.post('/marked-assessments', row)
@@ -246,8 +283,11 @@ function AssessmentForm({
   return (
     <form onSubmit={onSubmit} className="contents">
       <DialogHeader>
-        <DialogTitle>{assessment ? 'Edit marked assessment' : 'Add marked assessment'}</DialogTitle>
-        <DialogDescription>It's paid on the invoice for the fortnight of the date marked.</DialogDescription>
+        <DialogTitle>{assessment ? 'Edit marking' : 'Add other marking'}</DialogTitle>
+        <DialogDescription>
+          For marking outside your term plan, like an earlier term's reassessments. It's paid on the invoice for the fortnight of the
+          date marked.
+        </DialogDescription>
       </DialogHeader>
       <div className="grid gap-4">
         {isAdmin && (

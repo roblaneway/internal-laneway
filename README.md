@@ -37,7 +37,7 @@ The other 4 trainers and 39 students follow the pattern `first.last@example.com`
 | `npm run build:vercel` | Build, migrate and package for Vercel (see below) |
 | `npm run db:migrate` | Apply pending SQL migrations from `db/migrations` |
 | `npm run db:seed` / `db:reset` | Load the demo data / drop everything, migrate and seed |
-| `npm run test:rls` | 91 access-control checks through the API (run on fresh seed data) |
+| `npm run test:rls` | 111 access-control checks through the API (run on fresh seed data) |
 | `npm run user:password -- <email>` | Set a user's password from the terminal (hidden input, stored as a bcrypt hash) |
 
 ## Deploying for free
@@ -136,6 +136,7 @@ and UI only mirror it.
 | Gradebook (student lists, results) | All classes | Own classes only | None |
 | Units per course and term | Full edit | Read | None |
 | Class preparation hours | Everyone's | Own, for classes they teach | None |
+| Assessment plan and marking | Everyone's | Own | None |
 
 - A trainer's "own classes" are classes where they're the lead trainer (`classes.trainer_id`) or hold
   a non-cancelled shift (`public.teaches_class`).
@@ -170,9 +171,15 @@ and UI only mirror it.
   `trainer_billing`, which only the trainer and admins can read. Trainers edit their own details;
   only admins set the hourly and per-assessment rates (Users & roles → the receipt icon). GST-
   registered trainers get 10% GST and a tax invoice.
-- **Assessments:** trainers record the assessments and reassessments they mark (activity, unit,
-  course, term, quantity, date) under **My assessments**. Each entry is paid on the invoice for the
-  fortnight it was marked in. `marked_assessments` is private to the trainer and admins.
+- **Assessments:** under **My assessments → Term plan**, trainers keep each term's assessments
+  grouped by course: unit, assessment, due date and review-by date (a week after it's due by
+  default, shown in red once it passes with nothing marked), notes, and how many assessments and
+  reassessments they marked. **Fill from units** adds a row for each unit of the courses they teach
+  that term. Each marking has a status: **Marked** (done, not on an invoice) or **Ready** (goes on
+  the next invoice, which is the fortnight it was set to ready in; stored as `ready_on`). The
+  **On the invoice** tab lists what became ready in a fortnight, plus other marking added by hand
+  (paid in the fortnight of the date marked). Admins manage any trainer's plan.
+  `assessment_plan` and `marked_assessments` are private to the trainer and admins.
 - **Class preparation:** under **My class prep**, trainers log the hours they spent preparing each
   class in each term week (a grid of their classes × weeks 1–10, with optional notes). The invoice for
   the fortnight a week starts in gets a "Class preparation" line per class at the hourly rate, and
@@ -207,6 +214,8 @@ and UI only mirror it.
 - `class_students`, `class_tasks` and `task_results` for the gradebook.
 - `course_units` for each course's units per term.
 - `class_preparation` for prep hours per trainer, class and term week.
+- `assessment_plan` for each trainer's term assessments, and `marked_assessments.status`,
+  `ready_on` and `plan_id` for marking that waits to be invoiced.
 - `app.credentials` for password hashes; `created_at` / `updated_at` timestamps where useful.
 
 ## Project layout

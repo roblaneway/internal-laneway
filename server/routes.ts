@@ -403,24 +403,130 @@ api.put('/trainer-billing/:trainerId', async (c) => {
 
 // --- Marked assessments ------------------------------------------------------
 
-/** Assessments marked between two dates; RLS limits trainers to their own. */
+/**
+ * Assessments ready to invoice between two dates (by the day they were set to ready, so each
+ * fortnight's invoice gets what became ready in it). RLS limits trainers to their own.
+ */
 api.get('/marked-assessments', async (c) => {
   const [from, to] = requiredQuery(c, 'from', 'to')
-  const trainerId = c.req.query('trainer_id')
+  const trainerId = c.req.query('trainer_id') || null
   return c.json(
     await run(c, (sql) =>
-      trainerId
-        ? sql(
-            `select * from public.marked_assessments where marked_on between $1 and $2 and trainer_id = $3
-             order by marked_on, created_at`,
-            [from, to, trainerId],
-          )
-        : sql('select * from public.marked_assessments where marked_on between $1 and $2 order by marked_on, created_at', [from, to]),
+      sql(
+        `select * from public.marked_assessments
+         where status = 'ready' and ready_on between $1 and $2 and ($3::uuid is null or trainer_id = $3)
+         order by ready_on, marked_on, created_at`,
+        [from, to, trainerId],
+      ),
     ),
   )
 })
 // trainer_id defaults to the signed-in user; only admins can record marking for someone else (RLS).
-crud('/marked-assessments', 'marked_assessments', ['trainer_id', 'marked_on', 'activity', 'unit_code', 'term', 'course', 'kind', 'quantity'])
+crud('/marked-assessments', 'marked_assessments', [
+  'trainer_id',
+  'marked_on',
+  'activity',
+  'unit_code',
+  'term',
+  'course',
+  'kind',
+  'quantity',
+  'status',
+  'ready_on',
+])
+
+// --- Assessment plan ----------------------------------------------------------
+// A trainer's units and assessment due dates for a term, with how many they marked of each
+// (and of the resubmissions) and whether that's ready for the next invoice.
+
+api.get('/assessment-plan', async (c) => {
+  const [term] = requiredQuery(c, 'term')
+  const trainerId = c.req.query('trainer_id') || null
+  return c.json(
+    await run(c, (sql) =>
+      sql(
+        `select p.*,
+                coalesce(jsonb_agg(to_jsonb(m) order by m.kind) filter (where m.id is not null), '[]') as markings
+         from public.assessment_plan p
+         left join public.marked_assessments m on m.plan_id = p.id
+         where p.term = $1 and ($2::uuid is null or p.trainer_id = $2)
+         group by p.id
+         order by p.course, p.due_on nulls last, p.unit_code, p.activity`,
+        [term, trainerId],
+      ),
+    ),
+  )
+})
+crud('/assessment-plan', 'assessment_plan', ['trainer_id', 'term', 'course', 'unit_code', 'activity', 'due_on', 'review_by', 'notes'])
+
+/**
+ * Add a row for each unit of the courses a trainer teaches in a term (lead trainer, or rostered
+ * to deliver a session), skipping units already in their plan. Due the Monday after the unit's
+ * last week, with a week to review.
+ */
+api.post('/assessment-plan/from-units', async (c) => {
+  const { term, trainer_id } = await body(c)
+  if (!term) throw new HttpError(400, 'Choose a term')
+  const rows = await run(c, (sql) =>
+    sql(
+      `with trainer as (select coalesce($2::uuid, app.user_id()) as id),
+       taught as (
+         select distinct on (cl.course_id) cl.course_id, cl.start_date,
+                coalesce(nullif(btrim(cl.invoice_label), ''), upper(co.name)) as course
+         from public.classes cl
+         join public.courses co on co.id = cl.course_id
+         cross join trainer t
+         where cl.term = $1
+           and (cl.trainer_id = t.id or exists (
+             select 1 from public.roster_shifts s
+             where s.class_id = cl.id and s.status <> 'cancelled' and coalesce(s.cover_trainer_id, s.trainer_id) = t.id))
+         order by cl.course_id, cl.start_date
+       )
+       insert into public.assessment_plan (trainer_id, term, course, unit_code, due_on, review_by)
+       select t.id, $1, tc.course, u.code,
+              tc.start_date + u.end_week * 7, tc.start_date + u.end_week * 7 + 7
+       from public.course_units u
+       join taught tc on tc.course_id = u.course_id
+       cross join trainer t
+       where u.term = $1
+         and not exists (select 1 from public.assessment_plan p
+                         where p.trainer_id = t.id and p.term = $1 and p.unit_code = u.code)
+       returning id`,
+      [term, trainer_id || null],
+    ),
+  )
+  return c.json({ added: rows.length })
+})
+
+/**
+ * Set how many of a plan row's assessments (or reassessments) were marked, and their status.
+ * A quantity of 0 or less clears it.
+ */
+api.put('/assessment-plan/:id/marking', async (c) => {
+  const { kind, quantity, status } = await body(c)
+  if (kind !== 'Assessment' && kind !== 'Reassessment') throw new HttpError(400, 'Choose assessment or reassessment')
+  const qty = Number(quantity) || 0
+  const result = await run(c, async (sql) => {
+    const [plan] = await sql('select id from public.assessment_plan where id = $1', [c.req.param('id')])
+    if (!plan) throw notFound()
+    if (qty <= 0) {
+      await sql('delete from public.marked_assessments where plan_id = $1 and kind = $2', [plan.id, kind])
+      return null
+    }
+    const [row] = await sql(
+      `insert into public.marked_assessments
+         (trainer_id, plan_id, kind, quantity, status, marked_on, activity, unit_code, term, course)
+       select p.trainer_id, p.id, $2, $3, coalesce($4::text, 'marked'), (now() at time zone 'Australia/Melbourne')::date,
+              p.activity, p.unit_code, p.term, p.course
+       from public.assessment_plan p where p.id = $1
+       on conflict (plan_id, kind) do update set quantity = excluded.quantity, status = coalesce($4::text, marked_assessments.status)
+       returning *`,
+      [plan.id, kind, qty, status || null],
+    )
+    return row
+  })
+  return c.json(result)
+})
 
 // --- Class preparation --------------------------------------------------------
 // Prep hours per class per term week. Trainers see and record their own (for classes

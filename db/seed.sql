@@ -280,6 +280,29 @@ where p.unit_code is not null
 group by cl.course_id, cl.term, p.unit_code;
 
 -- ---------------------------------------------------------------------------
+-- Assessment plan: the Tuesday class's lead trainer planned each unit's two
+-- assessments, marked the first unit's and set one to ready for the invoice.
+-- ---------------------------------------------------------------------------
+insert into public.assessment_plan (id, trainer_id, term, course, unit_code, activity, due_on, review_by)
+select ('f1000000-0000-4000-8000-' || lpad(row_number() over (order by u.start_week, u.code, a.n)::text, 12, '0'))::uuid,
+       cl.trainer_id, cl.term, cl.invoice_label, u.code, 'Assessment ' || a.n,
+       cl.start_date + (case a.n when 1 then u.start_week + (u.end_week - u.start_week) / 2 else u.end_week end) * 7,
+       cl.start_date + (case a.n when 1 then u.start_week + (u.end_week - u.start_week) / 2 else u.end_week end) * 7 + 7
+from public.classes cl
+join public.course_units u on u.course_id = cl.course_id and u.term = cl.term
+cross join (values (1), (2)) as a(n)
+where cl.id = 'e0000000-0000-4000-8000-000000000001';
+
+insert into public.marked_assessments (trainer_id, plan_id, marked_on, activity, unit_code, term, course, kind, quantity, status, ready_on)
+select p.trainer_id, p.id, p.review_by - 2, p.activity, p.unit_code, p.term, p.course, v.kind, v.quantity, v.status, v.ready_on::date
+from public.assessment_plan p
+join (values
+  ('f1000000-0000-4000-8000-000000000001', 'Assessment', 9, 'ready', '2026-11-18'),
+  ('f1000000-0000-4000-8000-000000000001', 'Reassessment', 2, 'marked', null),
+  ('f1000000-0000-4000-8000-000000000002', 'Assessment', 8, 'marked', null)
+) as v(plan_id, kind, quantity, status, ready_on) on v.plan_id::uuid = p.id;
+
+-- ---------------------------------------------------------------------------
 -- Class preparation: the Tuesday class's lead trainer logged prep for weeks 1–8.
 -- ---------------------------------------------------------------------------
 insert into public.class_preparation (trainer_id, class_id, week_number, hours, notes)

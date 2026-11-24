@@ -152,8 +152,9 @@ async function as(email: string, password = PASSWORD) {
   const aiko = await as('aiko.tanaka@example.com')
   const student = await as('student@example.com')
   const admin = await as('admin@example.com')
+  // 2 manual entries plus 1 from the term plan that's ready; the plan's 'marked' ones aren't invoiced.
   const own = await marcus.get('/marked-assessments', ALL_TIME)
-  check('trainer reads own marked assessments', own.status === 200 && own.data.length === 2, `saw ${own.data?.length}`)
+  check('trainer reads own ready assessments', own.status === 200 && own.data.length === 3, `saw ${own.data?.length}`)
   const peek = await aiko.get('/marked-assessments', { ...ALL_TIME, trainer_id: marcus.id })
   check("trainer cannot read another trainer's marked assessments", peek.status === 200 && peek.data.length === 0, `saw ${peek.data?.length}`)
   const studentPeek = await student.get('/marked-assessments', ALL_TIME)
@@ -168,11 +169,61 @@ async function as(email: string, password = PASSWORD) {
   const badQty = await aiko.post('/marked-assessments', { ...entry, quantity: 0 })
   check('a quantity of 0 is rejected', badQty.status === 400, badQty.data?.error)
   const all = await admin.get('/marked-assessments', ALL_TIME)
-  check('admin reads everyone’s marked assessments', all.status === 200 && all.data.length === 3, `saw ${all.data?.length}`)
+  check('admin reads everyone’s marked assessments', all.status === 200 && all.data.length === 4, `saw ${all.data?.length}`)
   if (created.status === 201) {
     const removed = await aiko.del(`/marked-assessments/${created.data.id}`)
     check('trainer deletes own entry', removed.status === 204, `status ${removed.status}`)
   }
+}
+
+// Assessment plan: private to the trainer and admins; Ready marking goes on the invoice
+{
+  const marcus = await as('trainer@example.com') // leads class 1
+  const aiko = await as('aiko.tanaka@example.com')
+  const student = await as('student@example.com')
+  const admin = await as('admin@example.com')
+  const TERM = { term: 'Term 4 2026' }
+  const own = await marcus.get('/assessment-plan', TERM)
+  check('trainer reads own assessment plan', own.status === 200 && own.data.length > 0, `saw ${own.data?.length}`)
+  check('plan rows carry their marking', own.data?.[0]?.markings?.length === 2, `saw ${own.data?.[0]?.markings?.length}`)
+  const peek = await aiko.get('/assessment-plan', { ...TERM, trainer_id: marcus.id })
+  check("trainer cannot read another trainer's plan", peek.status === 200 && peek.data.length === 0, `saw ${peek.data?.length}`)
+  const studentPeek = await student.get('/assessment-plan', TERM)
+  check('student cannot read assessment plans', studentPeek.status === 200 && studentPeek.data.length === 0, `saw ${studentPeek.data?.length}`)
+  const forged = await aiko.post('/assessment-plan', { ...TERM, trainer_id: marcus.id, course: 'DIPLOMA IT', unit_code: 'ICTWEB522' })
+  check('trainer cannot add to another trainer\'s plan', forged.status === 403, forged.data?.error)
+  const hijack = await aiko.put(`/assessment-plan/${own.data[0].id}/marking`, { kind: 'Assessment', quantity: 50 })
+  check("trainer cannot mark another trainer's plan", hijack.status === 404, `status ${hijack.status}`)
+  const backwards = await marcus.patch(`/assessment-plan/${own.data[0].id}`, { due_on: '2026-11-10', review_by: '2026-11-01' })
+  check('review date before the due date is rejected', backwards.status === 400, backwards.data?.error)
+
+  const row = await aiko.post('/assessment-plan', { ...TERM, course: 'DIPLOMA IT', unit_code: 'ICTWEB522', activity: 'Assessment 1', due_on: '2026-10-26' })
+  check('trainer adds to own plan', row.status === 201 && row.data?.trainer_id === aiko.id, row.data?.error)
+  const invoiced = async () => (await aiko.get('/marked-assessments', ALL_TIME)).data.filter((a: { plan_id: string }) => a.plan_id === row.data.id)
+  const marked = await aiko.put(`/assessment-plan/${row.data.id}/marking`, { kind: 'Assessment', quantity: 6 })
+  check('marking starts as marked', marked.status === 200 && marked.data?.status === 'marked' && marked.data?.ready_on === null, marked.data?.error)
+  check('marked assessments stay off the invoice', (await invoiced()).length === 0)
+  const ready = await aiko.put(`/assessment-plan/${row.data.id}/marking`, { kind: 'Assessment', quantity: 6, status: 'ready' })
+  check('ready marking gets a ready date', ready.status === 200 && ready.data?.status === 'ready' && Boolean(ready.data?.ready_on), ready.data?.error)
+  check('ready assessments go on the invoice', (await invoiced()).length === 1)
+  const more = await aiko.put(`/assessment-plan/${row.data.id}/marking`, { kind: 'Assessment', quantity: 7 })
+  check('changing the quantity keeps it ready', more.data?.status === 'ready' && more.data?.ready_on === ready.data?.ready_on && more.data?.quantity === 7, more.data?.error)
+  await aiko.patch(`/assessment-plan/${row.data.id}`, { unit_code: 'ICTWEB518' })
+  check('renaming the plan row updates its marking', (await invoiced())[0]?.unit_code === 'ICTWEB518')
+  const back = await aiko.put(`/assessment-plan/${row.data.id}/marking`, { kind: 'Assessment', quantity: 7, status: 'marked' })
+  check('back to marked takes it off the invoice', back.data?.ready_on === null && (await invoiced()).length === 0, back.data?.error)
+  const cleared = await aiko.put(`/assessment-plan/${row.data.id}/marking`, { kind: 'Assessment', quantity: 0 })
+  check('a quantity of 0 clears the marking', cleared.status === 200 && cleared.data === null, cleared.data?.error)
+  const byAdmin = await admin.put(`/assessment-plan/${row.data.id}/marking`, { kind: 'Reassessment', quantity: 1, status: 'ready' })
+  check("admin marks a trainer's plan", byAdmin.status === 200 && byAdmin.data?.trainer_id === aiko.id, byAdmin.data?.error)
+  const removed = await aiko.del(`/assessment-plan/${row.data.id}`)
+  check('removing a plan row removes its marking', removed.status === 204 && (await invoiced()).length === 0, `status ${removed.status}`)
+
+  const filled = await aiko.post('/assessment-plan/from-units', TERM)
+  check('trainer fills own plan from units', filled.status === 200 && filled.data.added > 0, filled.data?.error)
+  const again = await aiko.post('/assessment-plan/from-units', TERM)
+  check('filling again skips units already planned', again.status === 200 && again.data.added === 0, `added ${again.data?.added}`)
+  await pool.query('delete from public.assessment_plan where trainer_id = $1', [aiko.id])
 }
 
 // Gradebook (the trainer's own student list and results, per class)

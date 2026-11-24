@@ -187,8 +187,9 @@ export function buildInvoice({
   const prepHours = prepLines.reduce((sum, l) => sum + l.hours, 0)
 
   const marked = assessments
-    .filter((a) => a.trainer_id === trainer.id && a.marked_on >= from && a.marked_on <= to)
-    .sort((a, b) => a.marked_on.localeCompare(b.marked_on) || a.created_at.localeCompare(b.created_at))
+    // Paid once ready, on the invoice for the fortnight it became ready in.
+    .filter((a) => a.trainer_id === trainer.id && a.status === 'ready' && a.ready_on && a.ready_on >= from && a.ready_on <= to)
+    .sort((a, b) => a.ready_on!.localeCompare(b.ready_on!) || a.marked_on.localeCompare(b.marked_on) || a.created_at.localeCompare(b.created_at))
   const assessmentCount = marked.reduce((sum, a) => sum + a.quantity, 0)
   const assessmentRateCents = toCents(billing?.assessment_rate)
   const assessmentAmount = assessmentCount === 0 ? 0 : assessmentRateCents === null ? null : assessmentCount * assessmentRateCents
