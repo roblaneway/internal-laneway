@@ -55,7 +55,7 @@ export function LoginPage() {
           <Wordmark />
           <span className="hidden h-8 w-px bg-border sm:block" aria-hidden />
           <p className="hidden text-sm font-medium text-muted-foreground sm:block">
-            Laneway Education — Staff &amp; Student Portal
+            Internal Laneway
           </p>
         </div>
       </header>

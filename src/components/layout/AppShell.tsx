@@ -88,9 +88,12 @@ const ROLE_LABEL: Record<Role, string> = { admin: 'Administrator', trainer: 'Tra
 
 export function Wordmark({ className }: { className?: string }) {
   return (
-    <span className={cn('flex flex-col leading-none', className)}>
-      <span className="font-heading text-2xl font-bold tracking-[0.12em] text-foreground">LANEWAY</span>
-      <span className="font-heading text-[11px] font-semibold tracking-[0.32em] text-primary">EDUCATION</span>
+    <span className={cn('flex items-center gap-2.5', className)}>
+      <img src="/logo.png" alt="" width={36} height={36} className="size-9 shrink-0" />
+      <span className="flex flex-col leading-none">
+        <span className="font-heading text-2xl font-bold tracking-[0.12em] text-foreground">LANEWAY</span>
+        <span className="font-heading text-[11px] font-semibold tracking-[0.32em] text-primary">EDUCATION</span>
+      </span>
     </span>
   )
 }
@@ -164,12 +167,12 @@ export function AppShell() {
             </SheetContent>
           </Sheet>
 
-          <NavLink to="/" className="flex items-center gap-4" aria-label="Laneway Education home">
+          <NavLink to="/" className="flex items-center gap-4" aria-label="Internal Laneway home">
             <Wordmark />
           </NavLink>
           <span className="hidden h-8 w-px bg-border md:block" aria-hidden />
           <p className="hidden text-sm font-medium text-muted-foreground md:block">
-            Laneway Education — Staff &amp; Student Portal
+            Internal Laneway
           </p>
 
           <div className="ml-auto flex items-center gap-1">

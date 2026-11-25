@@ -1,4 +1,4 @@
-# Laneway Education — Staff & Student Portal
+# Internal Laneway
 
 An internal portal for trainer rosters, announcements, notifications and week-by-week class content plans.
 **Demo rebuild:** every person, email and record in the seed data is fictional.
@@ -204,7 +204,7 @@ and UI only mirror it.
   read from training.gov.au's public API (the unit's current release's assessment requirements)
   and cached for 30 days in `unit_evidence`. `[Square brackets]` mark what's left to write, and
   **Copy** puts the feedback on the clipboard for the LMS. The page's **Generate feedback** panel
-  does the same outside the gradebook: choose a course, one of its units (from **Units**), the
+  does the same outside the gradebook: choose a term, a course, one of its units that term (from **Units**), the
   assessment and a template, optionally a student's name, then edit and copy the result.
 - **Units:** under **Units**, admins list each course's units of competency per term (code, title,
   first and last week, notes and an outline link). **Fill from content plans** builds a term's list
@@ -212,6 +212,11 @@ and UI only mirror it.
   term from an earlier one. Trainers see the list read-only, and the unit code fields in content
   plans and the gradebook suggest the class's units (a new plan week starts with the unit running
   that week). Stored in `course_units`, one row per course, term and code.
+- **Academic calendar:** every dashboard shows Laneway's academic calendar: where today falls
+  (term and week, or holidays and when the next term starts), the next public holiday, and this
+  term's months with term start, mid-term start, term end and holidays marked, the term week by
+  each row, and public holidays dotted. **Full year** shows all twelve months. The dates live in
+  `src/lib/academic-calendar.ts`; add next year's terms, holidays and public holidays there.
 - **Term length:** content plans cover a 10-week term. To change it, update `TERM_WEEKS` in
   `src/lib/dates.ts` and the `content_plans_week_number_check` constraint (with a new migration).
 - **Duplicate plan:** `duplicate_content_plan()` runs with the caller's permissions, so RLS decides

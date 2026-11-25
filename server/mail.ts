@@ -64,7 +64,7 @@ export function inviteMail({
   const text = [
     `Hi ${first},`,
     '',
-    `You've been invited to the Laneway Education Staff & Student Portal as a ${role}.`,
+    `You've been invited to Internal Laneway as a ${role}.`,
     '',
     `Sign in at ${loginUrl}`,
     `Email: ${to}`,
@@ -83,7 +83,7 @@ export function inviteMail({
       <p style="margin:0 0 4px;font-size:20px;font-weight:bold;letter-spacing:3px">LANEWAY</p>
       <p style="margin:0 0 24px;font-size:11px;letter-spacing:4px;color:#1e3a8a">EDUCATION</p>
       <p>Hi ${escapeHtml(first)},</p>
-      <p>You've been invited to the Laneway Education Staff &amp; Student Portal as a ${escapeHtml(role)}.</p>
+      <p>You've been invited to Internal Laneway as a ${escapeHtml(role)}.</p>
       <table role="presentation" style="margin:16px 0;background:#f4f5f7;border-radius:6px;padding:12px 16px;font-size:14px">
         <tr><td style="padding:2px 12px 2px 0;color:#6b7280">Email</td><td>${escapeHtml(to)}</td></tr>
         <tr><td style="padding:2px 12px 2px 0;color:#6b7280">Temporary password</td><td style="font-family:monospace;font-size:15px">${escapeHtml(password)}</td></tr>
@@ -93,5 +93,5 @@ export function inviteMail({
     </td></tr>
   </table>
 </body></html>`
-  return { to, subject: 'Your Laneway Education portal account', text, html }
+  return { to, subject: 'Your Internal Laneway account', text, html }
 }
