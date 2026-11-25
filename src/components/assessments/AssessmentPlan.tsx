@@ -32,6 +32,18 @@ const REVIEW_DAYS = 7
 
 const STATUS_LABELS: Record<MarkingStatus, string> = { marked: 'Marked', ready: 'Ready' }
 
+/**
+ * Courses in teaching order: Foundation, Cyber, Diploma (web), then Advanced Diploma; anything
+ * else after them. Course names are free text ("Cyber", "DIPLOMA IT - CYBERSECURITY"), so by keyword.
+ */
+function courseRank(course: string) {
+  if (/foundation/i.test(course)) return 0
+  if (/cyber/i.test(course)) return 1
+  if (/\badv/i.test(course)) return 3
+  if (/diploma|\bweb\b|\bdip\b/i.test(course)) return 2
+  return 4
+}
+
 const nextActivity = (activity: string) => {
   const match = activity.match(/^(.*?)(\d+)\s*$/)
   return match ? `${match[1]}${Number(match[2]) + 1}` : `${activity} 2`
@@ -95,7 +107,7 @@ export function AssessmentPlan() {
   const groups = useMemo(() => {
     const byCourse = new Map<string, AssessmentPlanRow[]>()
     for (const row of rows) byCourse.set(row.course, [...(byCourse.get(row.course) ?? []), row])
-    return [...byCourse]
+    return [...byCourse].sort(([a], [b]) => courseRank(a) - courseRank(b) || a.localeCompare(b, undefined, { numeric: true }))
   }, [rows])
 
   const totals = useMemo(() => {
