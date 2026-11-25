@@ -1,8 +1,8 @@
 import { Fragment, useMemo, useState, type FormEvent, type KeyboardEvent } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { CalendarClock, CopyPlus, Loader2, MoreHorizontal, Pencil, Plus, Trash2, Wand2 } from 'lucide-react'
+import { CalendarClock, CopyPlus, Loader2, MessageSquareText, MoreHorizontal, Pencil, Plus, Trash2, Wand2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -256,7 +256,20 @@ function PlanRow({
   const overdue = !assessment && review !== null && review < today
   return (
     <tr className="border-b last:border-b-0 hover:bg-muted/30">
-      <td className="px-3 py-2 font-mono whitespace-nowrap">{row.unit_code}</td>
+      <td className="px-3 py-1.5 whitespace-nowrap">
+        <span className="inline-flex items-center gap-1">
+          <span className="font-mono">{row.unit_code}</span>
+          <Button asChild variant="ghost" size="icon" className="size-7 text-muted-foreground hover:text-primary">
+            <Link
+              to={`/feedback-templates?${new URLSearchParams({ term: row.term, unit: row.unit_code, course_name: row.course, ...(row.activity === 'Assessment 2' ? { assessment: 'Assessment 2' } : {}) })}`}
+              title={`Feedback for ${row.unit_code} ${row.activity}`}
+              aria-label={`Feedback for ${row.unit_code} ${row.activity}`}
+            >
+              <MessageSquareText className="size-3.5" />
+            </Link>
+          </Button>
+        </span>
+      </td>
       <td className="px-3 py-2 whitespace-nowrap">{row.activity}</td>
       <td className="px-3 py-2 whitespace-nowrap tabular-nums">{row.due_on ? formatDate(row.due_on) : '—'}</td>
       <td className={cn('px-3 py-2 whitespace-nowrap tabular-nums', overdue && 'font-medium text-destructive')}>

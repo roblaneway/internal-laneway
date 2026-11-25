@@ -156,7 +156,19 @@ function FeedbackGenerator({ templates }: { templates: FeedbackTemplate[] }) {
     const withUnits = new Set((units.data ?? []).filter((u) => u.term === term).map((u) => u.course_id))
     return (courses.data ?? []).filter((c) => withUnits.has(c.id))
   }, [courses.data, units.data, term])
-  const course: Course | undefined = courseOptions.find((c) => c.id === params.get('course')) ?? courseOptions[0]
+  // Coming from the term plan there's no course id: take a course with that unit in the term,
+  // preferring the one named like the plan's course.
+  const course: Course | undefined = useMemo(() => {
+    const byId = courseOptions.find((c) => c.id === params.get('course'))
+    if (byId) return byId
+    const unitCode = params.get('unit')
+    const withUnit = unitCode
+      ? courseOptions.filter((c) => (units.data ?? []).some((u) => u.course_id === c.id && u.term === term && u.code === unitCode))
+      : []
+    const name = params.get('course_name')?.toLowerCase()
+    const named = name ? withUnit.find((c) => c.name.toLowerCase() === name || c.code.toLowerCase() === name) : undefined
+    return named ?? withUnit[0] ?? courseOptions[0]
+  }, [courseOptions, units.data, term, params])
   const unitOptions = useMemo(() => (course && term ? unitsOf(units.data ?? [], course.id, term) : []), [units.data, course, term])
   const unit = unitOptions.find((u) => u.code === params.get('unit')) ?? unitOptions[0]
   const assessment = ASSESSMENTS.find((a) => a === params.get('assessment')) ?? ASSESSMENTS[0]
