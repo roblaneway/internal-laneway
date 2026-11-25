@@ -5,6 +5,7 @@ import { randomInt } from 'node:crypto'
 import { HttpError, notFound } from './errors.ts'
 import { inviteMail, sendMail } from './mail.ts'
 import { notificationStream } from './realtime.ts'
+import { fetchUnitEvidence, isUnitCode } from './tga.ts'
 
 // Every route runs inside withUser(), so row-level security in the database is
 // what actually enforces access; these handlers only shape the queries.
@@ -564,6 +565,74 @@ api.put('/class-preparation', async (c) => {
 api.delete('/class-preparation/:id', async (c) => {
   if (!(await run(c, (sql) => deleteRow(sql, 'class_preparation', c.req.param('id'))))) throw notFound()
   return c.body(null, 204)
+})
+
+// --- Feedback templates and unit evidence ----------------------------------------
+// Shared templates (no owner) are admin-managed; trainers can also keep their own (RLS).
+
+api.get('/feedback-templates', async (c) =>
+  c.json(
+    await run(c, (sql) =>
+      sql(`select * from public.feedback_templates
+           order by owner_id nulls first,
+                    array_position(array['satisfactory', 'reassessment', 'not_satisfactory_final', 'not_submitted', 'other'], outcome),
+                    name`),
+    ),
+  ),
+)
+
+api.post('/feedback-templates', async (c) => {
+  const data = pick(await body(c), ['owner_id', 'name', 'outcome', 'body'])
+  // A trainer's templates are their own; admins add shared ones unless they say otherwise.
+  const row = await run(c, async (sql) => {
+    const [{ admin }] = await sql<{ admin: boolean }>('select public.is_admin() as admin')
+    const owner = admin ? (data.owner_id ?? null) : c.get('userId')
+    return insertRow(sql, 'feedback_templates', { ...data, owner_id: owner })
+  })
+  return c.json(row, 201)
+})
+api.patch('/feedback-templates/:id', async (c) => {
+  const data = pick(await body(c), ['name', 'outcome', 'body'])
+  return c.json(found(await run(c, (sql) => updateRow(sql, 'feedback_templates', c.req.param('id'), data))))
+})
+api.delete('/feedback-templates/:id', async (c) => {
+  if (!(await run(c, (sql) => deleteRow(sql, 'feedback_templates', c.req.param('id'))))) throw notFound()
+  return c.body(null, 204)
+})
+
+const EVIDENCE_MAX_AGE_DAYS = 30
+
+/**
+ * A unit's knowledge and performance evidence from training.gov.au, cached for a month
+ * (staff only, by RLS). ?refresh=1 fetches it again.
+ */
+api.get('/unit-evidence/:code', async (c) => {
+  const code = c.req.param('code').trim().toUpperCase()
+  if (!isUnitCode(code)) throw new HttpError(400, 'Enter a unit code like ICTWEB519')
+  const refresh = c.req.query('refresh') === '1'
+  const cached = await run(c, async (sql) => {
+    const [{ staff }] = await sql<{ staff: boolean }>('select public.is_staff() as staff')
+    if (!staff) throw new HttpError(403, 'Only staff can look up units')
+    const [row] = await sql(
+      `select * from public.unit_evidence where code = $1 and fetched_at > now() - make_interval(days => $2)`,
+      [code, EVIDENCE_MAX_AGE_DAYS],
+    )
+    return row
+  })
+  if (cached && !refresh) return c.json(cached)
+  // Fetched outside the transaction, so a slow training.gov.au doesn't hold a connection.
+  const evidence = await fetchUnitEvidence(code)
+  const [row] = await run(c, (sql) =>
+    sql(
+      `insert into public.unit_evidence (code, title, release, knowledge, performance, fetched_at)
+       values ($1, $2, $3, $4, $5, now())
+       on conflict (code) do update set title = excluded.title, release = excluded.release,
+         knowledge = excluded.knowledge, performance = excluded.performance, fetched_at = now()
+       returning *`,
+      [code, evidence.title, evidence.release, JSON.stringify(evidence.knowledge), JSON.stringify(evidence.performance)],
+    ),
+  )
+  return c.json(row)
 })
 
 // --- Gradebook ---------------------------------------------------------------

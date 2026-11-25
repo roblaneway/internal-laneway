@@ -10,6 +10,7 @@ import type {
   ContentPlan,
   Course,
   CourseUnit,
+  FeedbackTemplate,
   Gradebook,
   MarkedAssessment,
   Notification,
@@ -17,6 +18,7 @@ import type {
   RosterConflict,
   Shift,
   TrainerBilling,
+  UnitEvidence,
 } from '@/lib/types'
 
 // Query keys are shared so mutations can invalidate them.
@@ -41,6 +43,8 @@ export const keys = {
   preparation: (trainerId: string) => ['class-preparation', trainerId] as const,
   allPreparation: ['class-preparation'] as const,
   assessments: (from: string, to: string, trainerId: string) => ['marked-assessments', from, to, trainerId] as const,
+  feedbackTemplates: ['feedback-templates'] as const,
+  unitEvidence: (code: string) => ['unit-evidence', code] as const,
   assessmentPlan: (term: string, trainerId: string) => ['marked-assessments', 'plan', term, trainerId] as const,
 }
 
@@ -162,6 +166,26 @@ export function useAssessmentPlan(term: string | undefined, trainerId: string) {
     queryKey: keys.assessmentPlan(term ?? '', trainerId),
     enabled: Boolean(term && trainerId),
     queryFn: () => api.get<AssessmentPlanRow[]>('/assessment-plan', { term: term!, trainer_id: trainerId }),
+  })
+}
+
+/** Shared feedback templates and the signed-in trainer's own (staff only). */
+export function useFeedbackTemplates() {
+  return useQuery({
+    queryKey: keys.feedbackTemplates,
+    queryFn: () => api.get<FeedbackTemplate[]>('/feedback-templates'),
+  })
+}
+
+/** A unit's knowledge and performance evidence from training.gov.au. */
+export function useUnitEvidence(code: string | null | undefined) {
+  const unit = code?.trim().toUpperCase() ?? ''
+  return useQuery({
+    queryKey: keys.unitEvidence(unit),
+    enabled: /^[A-Z0-9]{5,15}$/.test(unit),
+    staleTime: 60 * 60 * 1000,
+    retry: false,
+    queryFn: () => api.get<UnitEvidence>(`/unit-evidence/${unit}`),
   })
 }
 

@@ -78,6 +78,10 @@ const MESSAGE_BY_CONSTRAINT: Record<string, string> = {
   assessment_plan_activity_check: 'Say which assessment it is, like "Assessment 1"',
   assessment_plan_review_check: "The review date can't be before the due date",
   assessment_plan_trainer_id_fkey: 'That trainer no longer exists',
+  feedback_templates_name_check: 'Give the template a name',
+  feedback_templates_body_check: 'Write the template',
+  feedback_templates_outcome_check: 'Choose which result the template is for',
+  feedback_templates_owner_id_fkey: 'That user no longer exists',
   task_results_task_fkey: "That student isn't on this class's list",
   task_results_student_fkey: "That student isn't on this class's list",
 }
