@@ -203,7 +203,9 @@ and UI only mirror it.
   met. Assessment 1 lists the unit's knowledge evidence and Assessment 2 its performance evidence,
   read from training.gov.au's public API (the unit's current release's assessment requirements)
   and cached for 30 days in `unit_evidence`. `[Square brackets]` mark what's left to write, and
-  **Copy** puts the feedback on the clipboard for the LMS.
+  **Copy** puts the feedback on the clipboard for the LMS. The page's **Generate feedback** panel
+  does the same outside the gradebook: choose a course, one of its units (from **Units**), the
+  assessment and a template, optionally a student's name, then edit and copy the result.
 - **Units:** under **Units**, admins list each course's units of competency per term (code, title,
   first and last week, notes and an outline link). **Fill from content plans** builds a term's list
   from the unit codes and weeks already in its classes' plans, and **Copy from term** starts a new

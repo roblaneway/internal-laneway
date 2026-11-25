@@ -1,7 +1,8 @@
 import { useMemo, useRef, useState, type FormEvent } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { CopyPlus, Loader2, MessageSquareText, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { Copy, CopyPlus, Loader2, MessageSquareText, Pencil, Plus, RefreshCw, Sparkles, Trash2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -15,10 +16,10 @@ import { EmptyState, ErrorState } from '@/components/EmptyState'
 import { ListSkeleton } from '@/components/ListSkeleton'
 import { PageHeader } from '@/components/PageHeader'
 import { useProfile } from '@/auth/AuthProvider'
-import { keys, useFeedbackTemplates, useUnitEvidence } from '@/hooks/use-data'
+import { keys, useCourses, useCourseUnits, useFeedbackTemplates, useUnitEvidence } from '@/hooks/use-data'
 import { api } from '@/lib/api'
-import { OUTCOMES, OUTCOME_LABEL, PLACEHOLDERS, renderTemplate } from '@/lib/feedback'
-import type { FeedbackOutcome, FeedbackTemplate, UnitEvidence } from '@/lib/types'
+import { OUTCOMES, OUTCOME_LABEL, PLACEHOLDERS, evidenceFor, renderTemplate, unfilledPrompts } from '@/lib/feedback'
+import type { Course, CourseUnit, FeedbackOutcome, FeedbackTemplate, UnitEvidence } from '@/lib/types'
 
 type Draft = Pick<FeedbackTemplate, 'name' | 'outcome' | 'body'> & { id?: string; shared: boolean }
 
@@ -29,6 +30,7 @@ export function FeedbackTemplatesPage() {
   const templates = useFeedbackTemplates()
   const queryClient = useQueryClient()
   const [editing, setEditing] = useState<Draft | null>(null)
+  const [params] = useSearchParams()
 
   const remove = useMutation({
     mutationFn: (id: string) => api.delete(`/feedback-templates/${id}`),
@@ -54,6 +56,9 @@ export function FeedbackTemplatesPage() {
         }
       />
 
+      {templates.data && templates.data.length > 0 && <FeedbackGenerator templates={templates.data} />}
+
+      <h2 className="mt-8 mb-3 text-sm font-semibold">Templates</h2>
       {templates.error ? (
         <ErrorState error={templates.error} />
       ) : templates.isPending ? (
@@ -106,16 +111,216 @@ export function FeedbackTemplatesPage() {
 
       <Dialog open={editing !== null} onOpenChange={(o) => !o && setEditing(null)}>
         <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-4xl">
-          {editing && <TemplateForm key={editing.id ?? 'new'} draft={editing} onDone={() => setEditing(null)} />}
+          {editing && (
+            <TemplateForm key={editing.id ?? 'new'} draft={editing} previewUnit={params.get('unit') || SAMPLE_UNIT} onDone={() => setEditing(null)} />
+          )}
         </DialogContent>
       </Dialog>
     </>
   )
 }
 
+const ASSESSMENTS = ['Assessment 1', 'Assessment 2'] as const
+
+/** A course's units, one per code (latest term's title first), in code order. */
+function unitsOf(units: CourseUnit[], courseId: string) {
+  const byCode = new Map<string, CourseUnit>()
+  for (const u of [...units].sort((a, b) => b.term.localeCompare(a.term, undefined, { numeric: true }))) {
+    if (u.course_id === courseId && !byCode.has(u.code)) byCode.set(u.code, u)
+  }
+  return [...byCode.values()].sort((a, b) => a.code.localeCompare(b.code))
+}
+
+/**
+ * Choose a course, unit, assessment and template to get the feedback written out, with the
+ * unit's criteria from training.gov.au, ready to copy. Choices live in the URL.
+ */
+function FeedbackGenerator({ templates }: { templates: FeedbackTemplate[] }) {
+  const me = useProfile()
+  const courses = useCourses()
+  const units = useCourseUnits()
+  const [params, setParams] = useSearchParams()
+  const [student, setStudent] = useState('')
+  const [introduce, setIntroduce] = useState(false)
+
+  // Only courses that have units listed (under Units) can be chosen.
+  const courseOptions = useMemo(() => {
+    const withUnits = new Set((units.data ?? []).map((u) => u.course_id))
+    return (courses.data ?? []).filter((c) => withUnits.has(c.id))
+  }, [courses.data, units.data])
+  const course: Course | undefined = courseOptions.find((c) => c.id === params.get('course')) ?? courseOptions[0]
+  const unitOptions = useMemo(() => (course ? unitsOf(units.data ?? [], course.id) : []), [units.data, course])
+  const unit = unitOptions.find((u) => u.code === params.get('unit')) ?? unitOptions[0]
+  const assessment = ASSESSMENTS.find((a) => a === params.get('assessment')) ?? ASSESSMENTS[0]
+  const template = templates.find((t) => t.id === params.get('template')) ?? templates.find((t) => t.outcome === 'satisfactory') ?? templates[0]
+  const evidence = useUnitEvidence(unit?.code)
+
+  const set = (changes: Record<string, string>) =>
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        for (const [key, value] of Object.entries(changes)) next.set(key, value)
+        return next
+      },
+      { replace: true },
+    )
+
+  const generated = useMemo(
+    () =>
+      template && unit
+        ? renderTemplate(template.body, {
+            studentName: student,
+            trainerName: me.full_name,
+            introduceAssessor: introduce,
+            unitCode: unit.code,
+            assessment,
+            course: course?.name ?? '',
+            evidence: evidence.data,
+          })
+        : '',
+    [template, unit, student, me.full_name, introduce, assessment, course, evidence.data],
+  )
+  const which = evidenceFor(assessment)
+
+  if (courses.error || units.error) return <ErrorState error={(courses.error ?? units.error)!} />
+  if (courses.isPending || units.isPending) return <ListSkeleton rows={2} />
+  if (!courseOptions.length) {
+    return (
+      <EmptyState
+        icon={Sparkles}
+        title="No units to generate feedback for"
+        description="Feedback is generated for a course's units. An administrator lists them under Units."
+      />
+    )
+  }
+
+  return (
+    <Card className="gap-4 p-4">
+      <div className="flex items-center gap-2">
+        <Sparkles className="size-4 text-primary" />
+        <h2 className="text-sm font-semibold">Generate feedback</h2>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="space-y-1.5">
+          <Label>Course</Label>
+          <Select value={course?.id} onValueChange={(v) => set({ course: v, unit: unitsOf(units.data ?? [], v)[0]?.code ?? '' })}>
+            <SelectTrigger className="w-full" aria-label="Course">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {courseOptions.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <Label>Unit</Label>
+          <Select value={unit?.code} onValueChange={(v) => set({ unit: v })}>
+            <SelectTrigger className="w-full" aria-label="Unit">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {unitOptions.map((u) => (
+                <SelectItem key={u.code} value={u.code}>
+                  <span className="font-mono">{u.code}</span>
+                  {u.title && <span className="truncate text-muted-foreground">{u.title}</span>}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <Label>Assessment</Label>
+          <Select value={assessment} onValueChange={(v) => set({ assessment: v })}>
+            <SelectTrigger className="w-full" aria-label="Assessment">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Assessment 1">Assessment 1 · knowledge evidence</SelectItem>
+              <SelectItem value="Assessment 2">Assessment 2 · performance evidence</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <Label>Template</Label>
+          <Select value={template?.id} onValueChange={(v) => set({ template: v })}>
+            <SelectTrigger className="w-full" aria-label="Template">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {templates.map((t) => (
+                <SelectItem key={t.id} value={t.id}>
+                  {t.name}
+                  {t.owner_id && <span className="text-xs text-muted-foreground">· mine</span>}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+        <div className="space-y-1.5 sm:w-72">
+          <Label htmlFor="g-student">Student name (optional)</Label>
+          <Input id="g-student" value={student} onChange={(e) => setStudent(e.target.value)} placeholder="Alex Morgan" />
+        </div>
+        <label className="flex items-center gap-2 pb-2 text-sm">
+          <Switch checked={introduce} onCheckedChange={setIntroduce} /> Introduce me as the assessor
+        </label>
+      </div>
+
+      <p className="text-xs text-muted-foreground">
+        {evidence.isFetching
+          ? `Loading ${unit?.code} from training.gov.au…`
+          : evidence.error
+            ? `Couldn't load ${unit?.code} from training.gov.au (${evidence.error.message}). The criteria are left for you to write.`
+            : evidence.data &&
+              `Criteria: ${which === 'both' ? 'knowledge and performance' : which} evidence of ${evidence.data.code} ${evidence.data.title} (release ${evidence.data.release}), from training.gov.au.`}
+      </p>
+      {/* Remounted when a choice changes, which writes the feedback out again; edits are kept until then. */}
+      <GeneratedFeedback key={generated} generated={generated} />
+    </Card>
+  )
+}
+
+/** The generated feedback, editable, with what's left to write and a copy button. */
+function GeneratedFeedback({ generated }: { generated: string }) {
+  const [text, setText] = useState(generated)
+  const prompts = unfilledPrompts(text)
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text)
+      toast.success('Feedback copied')
+    } catch {
+      toast.error("Couldn't copy. Select the text and copy it instead.")
+    }
+  }
+
+  return (
+    <>
+      <Textarea aria-label="Generated feedback" rows={18} value={text} onChange={(e) => setText(e.target.value)} className="text-sm" />
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <p className="text-xs text-[oklch(0.45_0.12_60)] sm:mr-auto">
+          {prompts.length > 0 &&
+            `${prompts.length === 1 ? '1 part' : `${prompts.length} parts`} in [square brackets] still to write: ${prompts.slice(0, 3).join(', ')}${prompts.length > 3 ? '…' : ''}`}
+        </p>
+        <Button type="button" variant="outline" disabled={text === generated} onClick={() => setText(generated)}>
+          <RefreshCw className="size-4" /> Start again
+        </Button>
+        <Button type="button" disabled={!text.trim()} onClick={copy}>
+          <Copy className="size-4" /> Copy feedback
+        </Button>
+      </div>
+    </>
+  )
+}
+
 const SAMPLE_UNIT = 'ICTWEB519'
 
-function TemplateForm({ draft, onDone }: { draft: Draft; onDone: () => void }) {
+function TemplateForm({ draft, previewUnit, onDone }: { draft: Draft; previewUnit: string; onDone: () => void }) {
   const me = useProfile()
   const isAdmin = me.role === 'admin'
   const queryClient = useQueryClient()
@@ -208,7 +413,7 @@ function TemplateForm({ draft, onDone }: { draft: Draft; onDone: () => void }) {
             </div>
           </div>
         </div>
-        <Preview body={body} />
+        <Preview body={body} initialUnit={previewUnit} />
       </div>
       <DialogFooter>
         <Button type="button" variant="outline" onClick={onDone}>
@@ -223,9 +428,9 @@ function TemplateForm({ draft, onDone }: { draft: Draft; onDone: () => void }) {
 }
 
 /** The template filled in for a sample student and a real unit from training.gov.au. */
-function Preview({ body }: { body: string }) {
+function Preview({ body, initialUnit }: { body: string; initialUnit: string }) {
   const me = useProfile()
-  const [unit, setUnit] = useState(SAMPLE_UNIT)
+  const [unit, setUnit] = useState(initialUnit)
   const [assessment, setAssessment] = useState('Assessment 1')
   const evidence = useUnitEvidence(unit)
   const queryClient = useQueryClient()

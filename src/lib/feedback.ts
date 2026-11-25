@@ -74,8 +74,9 @@ export function renderTemplate(body: string, ctx: FeedbackContext): string {
   const criteriaMissing = '[The criteria met, according to the mapping document]'
   const which = evidenceFor(ctx.assessment)
   const values: Record<string, string> = {
-    student_first_name: firstName(ctx.studentName),
-    student_name: ctx.studentName.trim(),
+    // Without a student (generating from the templates page), leave their name to fill in.
+    student_first_name: firstName(ctx.studentName) || '[Student first name]',
+    student_name: ctx.studentName.trim() || '[Student name]',
     trainer_name: ctx.trainerName.trim(),
     trainer_first_name: firstName(ctx.trainerName),
     assessor_intro: ctx.introduceAssessor ? `My name is ${ctx.trainerName.trim()} and I'm the assessor responsible for marking your work.` : '',
