@@ -16,8 +16,9 @@ import { EmptyState, ErrorState } from '@/components/EmptyState'
 import { ListSkeleton } from '@/components/ListSkeleton'
 import { PageHeader } from '@/components/PageHeader'
 import { useProfile } from '@/auth/AuthProvider'
-import { keys, useCourses, useCourseUnits, useFeedbackTemplates, useUnitEvidence } from '@/hooks/use-data'
+import { keys, useClasses, useCourses, useCourseUnits, useFeedbackTemplates, useUnitEvidence } from '@/hooks/use-data'
 import { api } from '@/lib/api'
+import { inTerm, termWeek, todayISO } from '@/lib/dates'
 import { OUTCOMES, OUTCOME_LABEL, PLACEHOLDERS, evidenceFor, renderTemplate, unfilledPrompts } from '@/lib/feedback'
 import type { Course, CourseUnit, FeedbackOutcome, FeedbackTemplate, UnitEvidence } from '@/lib/types'
 
@@ -122,34 +123,41 @@ export function FeedbackTemplatesPage() {
 
 const ASSESSMENTS = ['Assessment 1', 'Assessment 2'] as const
 
-/** A course's units, one per code (latest term's title first), in code order. */
-function unitsOf(units: CourseUnit[], courseId: string) {
-  const byCode = new Map<string, CourseUnit>()
-  for (const u of [...units].sort((a, b) => b.term.localeCompare(a.term, undefined, { numeric: true }))) {
-    if (u.course_id === courseId && !byCode.has(u.code)) byCode.set(u.code, u)
-  }
-  return [...byCode.values()].sort((a, b) => a.code.localeCompare(b.code))
+/** A course's units in a term, in teaching order (first week, then code). */
+function unitsOf(units: CourseUnit[], courseId: string, term: string) {
+  return units
+    .filter((u) => u.course_id === courseId && u.term === term)
+    .sort((a, b) => (a.start_week ?? 99) - (b.start_week ?? 99) || a.code.localeCompare(b.code))
 }
 
 /**
- * Choose a course, unit, assessment and template to get the feedback written out, with the
+ * Choose a term, course, unit, assessment and template to get the feedback written out, with the
  * unit's criteria from training.gov.au, ready to copy. Choices live in the URL.
  */
 function FeedbackGenerator({ templates }: { templates: FeedbackTemplate[] }) {
   const me = useProfile()
   const courses = useCourses()
   const units = useCourseUnits()
+  const classes = useClasses()
   const [params, setParams] = useSearchParams()
   const [student, setStudent] = useState('')
   const [introduce, setIntroduce] = useState(false)
 
-  // Only courses that have units listed (under Units) can be chosen.
+  // Terms with units listed (under Units), newest first; the current term to start with.
+  const terms = useMemo(
+    () => [...new Set((units.data ?? []).map((u) => u.term))].sort((a, b) => b.localeCompare(a, undefined, { numeric: true })),
+    [units.data],
+  )
+  const today = todayISO()
+  const currentTerm = classes.data?.find((c) => inTerm(termWeek(c.start_date, today)))?.term
+  const term = terms.find((t) => t === params.get('term')) ?? terms.find((t) => t === currentTerm) ?? terms[0]
+  // Only courses with units in the term can be chosen.
   const courseOptions = useMemo(() => {
-    const withUnits = new Set((units.data ?? []).map((u) => u.course_id))
+    const withUnits = new Set((units.data ?? []).filter((u) => u.term === term).map((u) => u.course_id))
     return (courses.data ?? []).filter((c) => withUnits.has(c.id))
-  }, [courses.data, units.data])
+  }, [courses.data, units.data, term])
   const course: Course | undefined = courseOptions.find((c) => c.id === params.get('course')) ?? courseOptions[0]
-  const unitOptions = useMemo(() => (course ? unitsOf(units.data ?? [], course.id) : []), [units.data, course])
+  const unitOptions = useMemo(() => (course && term ? unitsOf(units.data ?? [], course.id, term) : []), [units.data, course, term])
   const unit = unitOptions.find((u) => u.code === params.get('unit')) ?? unitOptions[0]
   const assessment = ASSESSMENTS.find((a) => a === params.get('assessment')) ?? ASSESSMENTS[0]
   const template = templates.find((t) => t.id === params.get('template')) ?? templates.find((t) => t.outcome === 'satisfactory') ?? templates[0]
@@ -183,7 +191,7 @@ function FeedbackGenerator({ templates }: { templates: FeedbackTemplate[] }) {
   const which = evidenceFor(assessment)
 
   if (courses.error || units.error) return <ErrorState error={(courses.error ?? units.error)!} />
-  if (courses.isPending || units.isPending) return <ListSkeleton rows={2} />
+  if (courses.isPending || units.isPending || classes.isPending) return <ListSkeleton rows={2} />
   if (!courseOptions.length) {
     return (
       <EmptyState
@@ -200,10 +208,26 @@ function FeedbackGenerator({ templates }: { templates: FeedbackTemplate[] }) {
         <Sparkles className="size-4 text-primary" />
         <h2 className="text-sm font-semibold">Generate feedback</h2>
       </div>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="space-y-1.5">
+          <Label>Term</Label>
+          <Select value={term} onValueChange={(v) => set({ term: v })}>
+            <SelectTrigger className="w-full" aria-label="Term">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {terms.map((t) => (
+                <SelectItem key={t} value={t}>
+                  {t}
+                  {t === currentTerm && <span className="text-xs text-muted-foreground">· current</span>}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
         <div className="space-y-1.5">
           <Label>Course</Label>
-          <Select value={course?.id} onValueChange={(v) => set({ course: v, unit: unitsOf(units.data ?? [], v)[0]?.code ?? '' })}>
+          <Select value={course?.id} onValueChange={(v) => set({ course: v, unit: unitsOf(units.data ?? [], v, term)[0]?.code ?? '' })}>
             <SelectTrigger className="w-full" aria-label="Course">
               <SelectValue />
             </SelectTrigger>
