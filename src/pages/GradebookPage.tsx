@@ -2,7 +2,7 @@ import { useMemo, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { GraduationCap, Loader2, MessageSquare, Pencil, Plus, Presentation, Trash2, UserPlus, Users } from 'lucide-react'
+import { Copy, FileText, GraduationCap, Loader2, MessageSquare, Pencil, Plus, Presentation, Trash2, UserPlus, Users } from 'lucide-react'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,11 +28,13 @@ import { EmptyState, ErrorState } from '@/components/EmptyState'
 import { ListSkeleton } from '@/components/ListSkeleton'
 import { PageHeader } from '@/components/PageHeader'
 import { UnitCodeInput } from '@/components/UnitCodeInput'
-import { keys, useClassUnits, useGradebook, useMyClasses } from '@/hooks/use-data'
+import { keys, useClassUnits, useFeedbackTemplates, useGradebook, useMyClasses, useUnitEvidence } from '@/hooks/use-data'
+import { useProfile } from '@/auth/AuthProvider'
+import { OUTCOME_LABEL, evidenceFor, renderTemplate, suggestedOutcome, unfilledPrompts } from '@/lib/feedback'
 import { api } from '@/lib/api'
 import { formatDate, inTerm, termWeek, todayISO } from '@/lib/dates'
 import { cn } from '@/lib/utils'
-import type { ClassStudent, ClassTask, Gradebook, TaskKind, TaskResult, TaskResultValue } from '@/lib/types'
+import type { ClassStudent, ClassTask, ClassWithCourse, Gradebook, TaskKind, TaskResult, TaskResultValue } from '@/lib/types'
 
 type Tab = 'assessment' | 'presentation' | 'students'
 const TABS: Tab[] = ['assessment', 'presentation', 'students']
@@ -145,7 +147,14 @@ export function GradebookPage() {
       ) : tab === 'students' ? (
         <StudentsPanel classId={classId} gradebook={gradebook.data} />
       ) : (
-        <ResultsGrid key={`${classId}-${tab}`} classId={classId} kind={tab} gradebook={gradebook.data} onAddStudents={() => setParam('tab', 'students')} />
+        <ResultsGrid
+          key={`${classId}-${tab}`}
+          classId={classId}
+          cls={cls}
+          kind={tab}
+          gradebook={gradebook.data}
+          onAddStudents={() => setParam('tab', 'students')}
+        />
       )}
     </>
   )
@@ -155,11 +164,13 @@ export function GradebookPage() {
 
 function ResultsGrid({
   classId,
+  cls,
   kind,
   gradebook,
   onAddStudents,
 }: {
   classId: string
+  cls: ClassWithCourse | undefined
   kind: TaskKind
   gradebook: Gradebook
   onAddStudents: () => void
@@ -320,11 +331,12 @@ function ResultsGrid({
       </Dialog>
 
       <Dialog open={Boolean(markingTask && markingStudent)} onOpenChange={(o) => !o && setMarking(null)}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className={kind === 'assessment' ? 'max-h-[92vh] overflow-y-auto sm:max-w-2xl' : 'sm:max-w-md'}>
           {markingTask && markingStudent && (
             <ResultForm
               key={resultKey(markingTask.id, markingStudent.id)}
               classId={classId}
+              cls={cls}
               task={markingTask}
               student={markingStudent}
               result={results.get(resultKey(markingTask.id, markingStudent.id))}
@@ -344,6 +356,7 @@ function ResultsGrid({
 
 function ResultForm({
   classId,
+  cls,
   task,
   student,
   result,
@@ -352,6 +365,7 @@ function ResultForm({
   onDone,
 }: {
   classId: string
+  cls: ClassWithCourse | undefined
   task: ClassTask
   student: ClassStudent
   result?: TaskResult
@@ -446,14 +460,19 @@ function ResultForm({
           </div>
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="r-feedback">Feedback</Label>
+          {isPresentation ? (
+            <Label htmlFor="r-feedback">Feedback</Label>
+          ) : (
+            <FeedbackTemplateBar cls={cls} task={task} student={student} result={value} attempt={Number(attempt)} feedback={feedback} onChange={setFeedback} />
+          )}
           <Textarea
             id="r-feedback"
-            rows={3}
+            rows={feedback.length > 240 ? 14 : 3}
             value={feedback}
             onChange={(e) => setFeedback(e.target.value)}
-            placeholder={isPresentation ? 'How the presentation went, what to improve' : 'What to fix for the reassessment'}
+            placeholder={isPresentation ? 'How the presentation went, what to improve' : 'Start from a template, or write the feedback'}
           />
+          {!isPresentation && <UnfilledNote feedback={feedback} />}
         </div>
       </div>
       <DialogFooter className="gap-2 sm:justify-between">
@@ -476,6 +495,112 @@ function ResultForm({
         </div>
       </DialogFooter>
     </form>
+  )
+}
+
+/** Pick a feedback template for the result, filled in for this student and unit; copy the feedback. */
+function FeedbackTemplateBar({
+  cls,
+  task,
+  student,
+  result,
+  attempt,
+  feedback,
+  onChange,
+}: {
+  cls: ClassWithCourse | undefined
+  task: ClassTask
+  student: ClassStudent
+  result: TaskResultValue | ''
+  attempt: number
+  feedback: string
+  onChange: (feedback: string) => void
+}) {
+  const me = useProfile()
+  const templates = useFeedbackTemplates()
+  const evidence = useUnitEvidence(task.unit_code)
+  const suggested = suggestedOutcome(result, attempt)
+  const options = useMemo(() => {
+    const list = templates.data ?? []
+    // The suggested result's templates first, then the rest in their usual order.
+    return [...list.filter((t) => t.outcome === suggested), ...list.filter((t) => t.outcome !== suggested)]
+  }, [templates.data, suggested])
+  const which = evidenceFor(task.title)
+
+  const apply = (id: string) => {
+    const template = templates.data?.find((t) => t.id === id)
+    if (!template) return
+    const previous = feedback
+    onChange(
+      renderTemplate(template.body, {
+        studentName: student.full_name,
+        trainerName: me.full_name,
+        introduceAssessor: Boolean(cls && cls.trainer_id !== me.id),
+        unitCode: task.unit_code ?? '',
+        assessment: task.title,
+        course: cls?.course?.name ?? '',
+        evidence: evidence.data,
+      }),
+    )
+    if (previous.trim()) toast(`Feedback replaced with “${template.name}”`, { action: { label: 'Undo', onClick: () => onChange(previous) } })
+  }
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(feedback)
+      toast.success('Feedback copied')
+    } catch {
+      toast.error("Couldn't copy. Select the text and copy it instead.")
+    }
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <Label htmlFor="r-feedback" className="mr-auto">
+          Feedback
+        </Label>
+        <Select value="" onValueChange={apply} disabled={!options.length || evidence.isLoading}>
+          <SelectTrigger size="sm" className="w-full sm:w-64" aria-label="Start from a template">
+            <FileText className="size-3.5" />
+            <SelectValue placeholder={evidence.isLoading ? 'Loading unit criteria…' : 'Start from a template'} />
+          </SelectTrigger>
+          <SelectContent>
+            {options.map((t) => (
+              <SelectItem key={t.id} value={t.id}>
+                {t.name}
+                {t.outcome === suggested && <span className="text-xs text-muted-foreground">· suggested</span>}
+                {t.owner_id && <span className="text-xs text-muted-foreground">· mine</span>}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button type="button" variant="outline" size="sm" disabled={!feedback.trim()} onClick={copy}>
+          <Copy className="size-3.5" /> Copy
+        </Button>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {!task.unit_code
+          ? 'Add a unit code to this assessment to list the criteria met from training.gov.au.'
+          : evidence.error
+            ? `Couldn't load ${task.unit_code} from training.gov.au (${evidence.error.message}). The criteria are left for you to write.`
+            : evidence.data
+              ? `Criteria: ${which === 'both' ? 'knowledge and performance' : which} evidence of ${evidence.data.code} ${evidence.data.title}, from training.gov.au.`
+              : suggested && `Suggested for ${OUTCOME_LABEL[suggested].toLowerCase()}.`}
+      </p>
+    </div>
+  )
+}
+
+/** Points out [square bracket] parts of a template still to be written. */
+function UnfilledNote({ feedback }: { feedback: string }) {
+  const prompts = unfilledPrompts(feedback)
+  if (!prompts.length) return null
+  return (
+    <p className="text-xs text-[oklch(0.45_0.12_60)]">
+      {prompts.length === 1 ? '1 part' : `${prompts.length} parts`} in [square brackets] still to write: {prompts.slice(0, 3).join(', ')}
+      {prompts.length > 3 && '…'}
+    </p>
   )
 }
 

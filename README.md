@@ -37,7 +37,7 @@ The other 4 trainers and 39 students follow the pattern `first.last@example.com`
 | `npm run build:vercel` | Build, migrate and package for Vercel (see below) |
 | `npm run db:migrate` | Apply pending SQL migrations from `db/migrations` |
 | `npm run db:seed` / `db:reset` | Load the demo data / drop everything, migrate and seed |
-| `npm run test:rls` | 111 access-control checks through the API (run on fresh seed data) |
+| `npm run test:rls` | 124 access-control checks through the API (run on fresh seed data) |
 | `npm run user:password -- <email>` | Set a user's password from the terminal (hidden input, stored as a bcrypt hash) |
 
 ## Deploying for free
@@ -137,6 +137,7 @@ and UI only mirror it.
 | Units per course and term | Full edit | Read | None |
 | Class preparation hours | Everyone's | Own, for classes they teach | None |
 | Assessment plan and marking | Everyone's | Own | None |
+| Feedback templates | All; manage shared ones | Shared (read) and own | None |
 
 - A trainer's "own classes" are classes where they're the lead trainer (`classes.trainer_id`) or hold
   a non-cancelled shift (`public.teaches_class`).
@@ -193,6 +194,16 @@ and UI only mirror it.
   readable only by the class's trainers and admins, and composite foreign keys stop a result
   pairing one class's task with another class's student. It's separate from the paid marked
   assessments on invoices.
+- **Feedback templates:** under **Feedback templates**, staff keep the feedback they send for
+  Satisfactory, Reassessment, Not Satisfactory after the second reassessment, and Not submitted
+  (Laneway's four come built in; admins manage shared templates, trainers can add their own).
+  In the gradebook's result dialog, **Start from a template** suggests the one for the result and
+  attempt, and fills in `{{placeholders}}`: the student's name, your name, an assessor
+  introduction when you aren't the class's trainer, the unit, and `{{criteria}}`, the criteria
+  met. Assessment 1 lists the unit's knowledge evidence and Assessment 2 its performance evidence,
+  read from training.gov.au's public API (the unit's current release's assessment requirements)
+  and cached for 30 days in `unit_evidence`. `[Square brackets]` mark what's left to write, and
+  **Copy** puts the feedback on the clipboard for the LMS.
 - **Units:** under **Units**, admins list each course's units of competency per term (code, title,
   first and last week, notes and an outline link). **Fill from content plans** builds a term's list
   from the unit codes and weeks already in its classes' plans, and **Copy from term** starts a new
@@ -214,6 +225,7 @@ and UI only mirror it.
 - `class_students`, `class_tasks` and `task_results` for the gradebook.
 - `course_units` for each course's units per term.
 - `class_preparation` for prep hours per trainer, class and term week.
+- `feedback_templates` and `unit_evidence` (training.gov.au cache) for marking feedback.
 - `assessment_plan` for each trainer's term assessments, and `marked_assessments.status`,
   `ready_on` and `plan_id` for marking that waits to be invoiced.
 - `app.credentials` for password hashes; `created_at` / `updated_at` timestamps where useful.

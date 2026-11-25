@@ -226,6 +226,47 @@ async function as(email: string, password = PASSWORD) {
   await pool.query('delete from public.assessment_plan where trainer_id = $1', [aiko.id])
 }
 
+// Feedback templates: shared ones are admin-managed; trainers keep their own privately
+{
+  const marcus = await as('trainer@example.com')
+  const aiko = await as('aiko.tanaka@example.com')
+  const student = await as('student@example.com')
+  const admin = await as('admin@example.com')
+  const shared = await marcus.get('/feedback-templates')
+  check('trainer reads the shared feedback templates', shared.status === 200 && shared.data.length === 4, `saw ${shared.data?.length}`)
+  const studentPeek = await student.get('/feedback-templates')
+  check('student cannot read feedback templates', studentPeek.status === 200 && studentPeek.data.length === 0, `saw ${studentPeek.data?.length}`)
+  const editShared = await marcus.patch(`/feedback-templates/${shared.data[0].id}`, { name: 'Hijacked' })
+  check('trainer cannot edit a shared template', editShared.status === 404, `status ${editShared.status}`)
+  const own = await marcus.post('/feedback-templates', { owner_id: null, name: 'Quick S', outcome: 'satisfactory', body: 'Well done {{student_first_name}}' })
+  check('trainer adds their own template', own.status === 201 && own.data?.owner_id === marcus.id, own.data?.error)
+  const peek = await aiko.get('/feedback-templates')
+  check("trainer cannot see another trainer's template", !peek.data.some((t: { id: string }) => t.id === own.data.id))
+  const editOwn = await marcus.patch(`/feedback-templates/${own.data.id}`, { body: 'Great work {{student_first_name}}' })
+  check('trainer edits own template', editOwn.status === 200, editOwn.data?.error)
+  const badOutcome = await marcus.post('/feedback-templates', { name: 'X', outcome: 'maybe', body: 'x' })
+  check('an unknown outcome is rejected', badOutcome.status === 400, badOutcome.data?.error)
+  const all = await admin.get('/feedback-templates')
+  check("admin sees everyone's templates", all.data.length === 5, `saw ${all.data?.length}`)
+  const sharedNew = await admin.post('/feedback-templates', { name: 'Extension granted', outcome: 'other', body: 'Hi {{student_first_name}}' })
+  check('admin adds a shared template', sharedNew.status === 201 && sharedNew.data?.owner_id === null, sharedNew.data?.error)
+  check('trainers see the new shared template', (await aiko.get('/feedback-templates')).data.length === 5)
+  await pool.query('delete from public.feedback_templates where id = any($1)', [[own.data.id, sharedNew.data.id]])
+
+  // Unit evidence is cached; a fresh cache entry is served without calling training.gov.au.
+  await pool.query(
+    `insert into public.unit_evidence (code, title, release, knowledge, performance)
+     values ('TSTUNIT01', 'Test unit', '1', '[{"text":"testing"}]', '[{"text":"test things"}]')`,
+  )
+  const evidence = await marcus.get('/unit-evidence/tstunit01')
+  check('staff read cached unit evidence', evidence.status === 200 && evidence.data?.knowledge?.[0]?.text === 'testing', evidence.data?.error)
+  const studentEvidence = await student.get('/unit-evidence/TSTUNIT01')
+  check('student cannot look up unit evidence', studentEvidence.status === 403, `status ${studentEvidence.status}`)
+  const badCode = await marcus.get('/unit-evidence/not-a-code')
+  check('an invalid unit code is rejected', badCode.status === 400, badCode.data?.error)
+  await pool.query("delete from public.unit_evidence where code = 'TSTUNIT01'")
+}
+
 // Gradebook (the trainer's own student list and results, per class)
 {
   const marcus = await as('trainer@example.com') // leads class 1
