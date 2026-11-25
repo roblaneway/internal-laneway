@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { Bell, CalendarDays, Pin } from 'lucide-react'
+import { AcademicCalendar } from '@/components/AcademicCalendar'
 import { EmptyState, ErrorState } from '@/components/EmptyState'
 import { ListSkeleton } from '@/components/ListSkeleton'
 import { PageHeader } from '@/components/PageHeader'
@@ -101,6 +102,7 @@ export function StudentDashboard() {
           )}
         </Panel>
       </div>
+      <AcademicCalendar />
     </>
   )
 }

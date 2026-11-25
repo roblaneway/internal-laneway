@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { AlertTriangle, CalendarCheck2, ClipboardList, Megaphone, Pin, TriangleAlert, UserX } from 'lucide-react'
+import { AcademicCalendar } from '@/components/AcademicCalendar'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { EmptyState, ErrorState } from '@/components/EmptyState'
@@ -184,6 +185,7 @@ export function AdminDashboard() {
         </Panel>
       </div>
       <p className="mt-6 text-xs text-muted-foreground">Next week starts {formatDate(nextWeekStart)}.</p>
+      <AcademicCalendar />
     </>
   )
 }

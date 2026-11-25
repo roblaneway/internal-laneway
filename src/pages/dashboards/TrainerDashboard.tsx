@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { BookOpen, CalendarDays, Monitor, MapPin } from 'lucide-react'
+import { AcademicCalendar } from '@/components/AcademicCalendar'
 import { EmptyState, ErrorState } from '@/components/EmptyState'
 import { ListSkeleton } from '@/components/ListSkeleton'
 import { PageHeader } from '@/components/PageHeader'
@@ -83,6 +84,7 @@ export function TrainerDashboard() {
           )}
         </Panel>
       </div>
+      <AcademicCalendar />
     </>
   )
 }
