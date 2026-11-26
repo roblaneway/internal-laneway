@@ -233,7 +233,7 @@ async function as(email: string, password = PASSWORD) {
   const student = await as('student@example.com')
   const admin = await as('admin@example.com')
   const shared = await marcus.get('/feedback-templates')
-  check('trainer reads the shared feedback templates', shared.status === 200 && shared.data.length === 4, `saw ${shared.data?.length}`)
+  check('trainer reads the shared feedback templates', shared.status === 200 && shared.data.length === 5, `saw ${shared.data?.length}`)
   const studentPeek = await student.get('/feedback-templates')
   check('student cannot read feedback templates', studentPeek.status === 200 && studentPeek.data.length === 0, `saw ${studentPeek.data?.length}`)
   const editShared = await marcus.patch(`/feedback-templates/${shared.data[0].id}`, { name: 'Hijacked' })
@@ -247,10 +247,10 @@ async function as(email: string, password = PASSWORD) {
   const badOutcome = await marcus.post('/feedback-templates', { name: 'X', outcome: 'maybe', body: 'x' })
   check('an unknown outcome is rejected', badOutcome.status === 400, badOutcome.data?.error)
   const all = await admin.get('/feedback-templates')
-  check("admin sees everyone's templates", all.data.length === 5, `saw ${all.data?.length}`)
+  check("admin sees everyone's templates", all.data.length === 6, `saw ${all.data?.length}`)
   const sharedNew = await admin.post('/feedback-templates', { name: 'Extension granted', outcome: 'other', body: 'Hi {{student_first_name}}' })
   check('admin adds a shared template', sharedNew.status === 201 && sharedNew.data?.owner_id === null, sharedNew.data?.error)
-  check('trainers see the new shared template', (await aiko.get('/feedback-templates')).data.length === 5)
+  check('trainers see the new shared template', (await aiko.get('/feedback-templates')).data.length === 6)
   await pool.query('delete from public.feedback_templates where id = any($1)', [[own.data.id, sharedNew.data.id]])
 
   // Unit evidence is cached; a fresh cache entry is served without calling training.gov.au.

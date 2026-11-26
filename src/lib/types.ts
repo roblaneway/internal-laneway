@@ -229,7 +229,7 @@ export interface RosterConflict {
 export type ClassWithCourse = ClassRow & { course: Course | null }
 
 /** Which result a feedback template is suggested for. */
-export type FeedbackOutcome = 'satisfactory' | 'reassessment' | 'not_satisfactory_final' | 'not_submitted' | 'other'
+export type FeedbackOutcome = 'satisfactory' | 'reassessment' | 'not_satisfactory_final' | 'not_submitted' | 'not_presented' | 'other'
 
 /** A feedback template; no owner means shared (managed by admins). */
 export interface FeedbackTemplate {

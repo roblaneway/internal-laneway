@@ -195,8 +195,9 @@ and UI only mirror it.
   pairing one class's task with another class's student. It's separate from the paid marked
   assessments on invoices.
 - **Feedback templates:** under **Feedback templates**, staff keep the feedback they send for
-  Satisfactory, Reassessment, Not Satisfactory after the second reassessment, and Not submitted
-  (Laneway's four come built in; admins manage shared templates, trainers can add their own).
+  Satisfactory, Reassessment, Not Satisfactory after the second reassessment, Not submitted, and
+  Did not present, suggested on Assessment 2 when the student hasn't presented (Laneway's five
+  come built in; admins manage shared templates, trainers can add their own).
   In the gradebook's result dialog, **Start from a template** suggests the one for the result and
   attempt, and fills in `{{placeholders}}`: the student's name, your name, an assessor
   introduction when you aren't the class's trainer, the unit, and `{{criteria}}`, the criteria

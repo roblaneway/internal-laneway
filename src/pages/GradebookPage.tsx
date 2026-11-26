@@ -2,7 +2,7 @@ import { useMemo, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Copy, FileText, GraduationCap, Loader2, MessageSquare, Pencil, Plus, Presentation, Trash2, UserPlus, Users } from 'lucide-react'
+import { AlertTriangle, Copy, FileText, GraduationCap, ListPlus, Loader2, MessageSquare, Pencil, Plus, Presentation, Trash2, UserPlus, Users } from 'lucide-react'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,11 +28,13 @@ import { EmptyState, ErrorState } from '@/components/EmptyState'
 import { ListSkeleton } from '@/components/ListSkeleton'
 import { PageHeader } from '@/components/PageHeader'
 import { UnitCodeInput } from '@/components/UnitCodeInput'
+import { AddFromPlanForm, PresentationTracker, RollCall } from '@/components/gradebook/Presentations'
 import { keys, useClassUnits, useFeedbackTemplates, useGradebook, useMyClasses, useUnitEvidence } from '@/hooks/use-data'
 import { useProfile } from '@/auth/AuthProvider'
 import { OUTCOME_LABEL, evidenceFor, renderTemplate, suggestedOutcome, unfilledPrompts } from '@/lib/feedback'
 import { api } from '@/lib/api'
 import { formatDate, inTerm, termWeek, todayISO } from '@/lib/dates'
+import { RESULT_LABEL, RESULT_SHORT, RESULT_STYLE, needsPresentation, presentationState, resultKey, type PresentationState } from '@/lib/gradebook'
 import { cn } from '@/lib/utils'
 import type { ClassStudent, ClassTask, ClassWithCourse, Gradebook, TaskKind, TaskResult, TaskResultValue } from '@/lib/types'
 
@@ -44,30 +46,11 @@ const RESULTS: Record<TaskKind, TaskResultValue[]> = {
   presentation: ['S', 'NYS', 'ABSENT', 'RESCHEDULED'],
 }
 
-const RESULT_LABEL: Record<TaskResultValue, string> = {
-  S: 'Satisfactory',
-  NYS: 'Not yet satisfactory',
-  NS: 'Not submitted',
-  ABSENT: 'Absent',
-  RESCHEDULED: 'Rescheduled',
-}
-
-const RESULT_SHORT: Record<TaskResultValue, string> = { S: 'S', NYS: 'NYS', NS: 'NS', ABSENT: 'Absent', RESCHEDULED: 'Resched.' }
-
-const RESULT_STYLE: Record<TaskResultValue, string> = {
-  S: 'bg-success/10 text-success border-success/30',
-  NYS: 'bg-destructive/10 text-destructive border-destructive/30',
-  NS: 'bg-muted text-muted-foreground border-border',
-  ABSENT: 'bg-warning/15 text-[oklch(0.45_0.12_60)] border-warning/30',
-  RESCHEDULED: 'bg-accent text-accent-foreground border-primary/20',
-}
-
 const KIND_LABEL: Record<TaskKind, { one: string; many: string }> = {
   assessment: { one: 'assessment', many: 'Assessments' },
   presentation: { one: 'presentation', many: 'Presentations' },
 }
 
-const resultKey = (taskId: string, studentId: string) => `${taskId}:${studentId}`
 const attemptLabel = (attempt: number) => (attempt === 1 ? '1st attempt' : attempt === 2 ? 'Reassessment' : '2nd reassessment')
 
 /** A trainer's results for their students' assessments and presentations, per class. */
@@ -177,6 +160,8 @@ function ResultsGrid({
 }) {
   const [editingTask, setEditingTask] = useState<ClassTask | 'new' | null>(null)
   const [marking, setMarking] = useState<{ taskId: string; studentId: string } | null>(null)
+  const [fromPlan, setFromPlan] = useState(false)
+  const [rollCall, setRollCall] = useState<ClassTask | null>(null)
 
   const tasks = gradebook.tasks.filter((t) => t.kind === kind)
   const students = gradebook.students
@@ -185,10 +170,22 @@ function ResultsGrid({
   const label = KIND_LABEL[kind]
   const Icon = kind === 'presentation' ? Presentation : GraduationCap
 
+  const presentationOf = (unitCode: string | null, studentId: string) => presentationState(gradebook.tasks, results, unitCode, studentId)
+  const planButton = cls && (
+    <Button variant="outline" onClick={() => setFromPlan(true)}>
+      <ListPlus className="size-4" /> From term plan
+    </Button>
+  )
   const addButton = (
     <Button onClick={() => setEditingTask('new')}>
       <Plus className="size-4" /> Add {label.one}
     </Button>
+  )
+  const buttons = (
+    <div className="flex flex-wrap justify-end gap-2">
+      {planButton}
+      {addButton}
+    </div>
   )
 
   let body
@@ -210,8 +207,12 @@ function ResultsGrid({
       <EmptyState
         icon={Icon}
         title={`No ${label.many.toLowerCase()} yet`}
-        description={`Add this term's ${label.many.toLowerCase()} to start recording results.`}
-        action={addButton}
+        description={
+          kind === 'presentation'
+            ? "Students present each unit's Assessment 2 to show their performance. Add the presentations from your term plan to track who has presented."
+            : `Add this term's ${label.many.toLowerCase()} to start recording results.`
+        }
+        action={buttons}
       />
     )
   } else {
@@ -219,11 +220,31 @@ function ResultsGrid({
       (sum, t) => sum + active.filter((s) => results.get(resultKey(t.id, s.id))?.result !== 'S').length,
       0,
     )
+    const notPresented =
+      kind === 'assessment'
+        ? tasks.filter(needsPresentation).reduce((sum, t) => sum + active.filter((s) => notYetPresented(presentationOf(t.unit_code, s.id))).length, 0)
+        : 0
     body = (
       <>
+        {kind === 'presentation' && (
+          <PresentationTracker
+            tasks={tasks}
+            students={active}
+            results={results}
+            onRollCall={setRollCall}
+            onMark={(t, s) => setMarking({ taskId: t.id, studentId: s.id })}
+          />
+        )}
         <p className="mb-2 text-sm text-muted-foreground">
           Select a cell to record a result.{' '}
           {outstanding ? `${outstanding} still to be satisfactory.` : `Every active student is satisfactory in all ${label.many.toLowerCase()}.`}
+          {notPresented > 0 && (
+            <span className="text-[oklch(0.45_0.12_60)]">
+              {' '}
+              <Presentation className="inline size-3.5 align-[-2px]" aria-hidden /> {notPresented} Assessment 2{' '}
+              {notPresented === 1 ? 'result is' : 'results are'} for students who haven't presented yet.
+            </span>
+          )}
         </p>
         <div className="overflow-x-auto rounded-lg border bg-card">
           <table className="w-full text-sm">
@@ -261,12 +282,15 @@ function ResultsGrid({
                     </th>
                     {tasks.map((t) => {
                       const r = results.get(resultKey(t.id, s.id))
+                      const pres = !s.withdrawn && needsPresentation(t) ? presentationOf(t.unit_code, s.id) : null
+                      const missing = notYetPresented(pres)
                       return (
                         <td key={t.id} className="px-2 py-1.5">
                           <button
                             type="button"
                             onClick={() => setMarking({ taskId: t.id, studentId: s.id })}
-                            aria-label={`${s.full_name}, ${t.title}: ${r ? RESULT_LABEL[r.result] : 'no result'}`}
+                            aria-label={`${s.full_name}, ${t.title}: ${r ? RESULT_LABEL[r.result] : 'no result'}${missing ? ', not presented yet' : ''}`}
+                            title={missing ? presentationNote(pres!) : undefined}
                             className={cn(
                               'flex h-9 w-full items-center justify-center gap-1 rounded-md border text-xs font-semibold transition-colors',
                               r ? RESULT_STYLE[r.result] : 'border-dashed text-muted-foreground hover:bg-muted',
@@ -275,6 +299,7 @@ function ResultsGrid({
                             {r ? RESULT_SHORT[r.result] : '—'}
                             {r && r.attempt > 1 && <span className="font-normal">· R{r.attempt - 1}</span>}
                             {r?.feedback && <MessageSquare className="size-3" aria-hidden />}
+                            {missing && <Presentation className="size-3 text-[oklch(0.55_0.14_60)]" aria-hidden />}
                           </button>
                         </td>
                       )
@@ -313,7 +338,7 @@ function ResultsGrid({
 
   return (
     <>
-      {students.length > 0 && tasks.length > 0 && <div className="mb-3 flex justify-end">{addButton}</div>}
+      {students.length > 0 && tasks.length > 0 && <div className="mb-3">{buttons}</div>}
       {body}
 
       <Dialog open={editingTask !== null} onOpenChange={(o) => !o && setEditingTask(null)}>
@@ -330,6 +355,18 @@ function ResultsGrid({
         </DialogContent>
       </Dialog>
 
+      <Dialog open={fromPlan} onOpenChange={setFromPlan}>
+        <DialogContent className="sm:max-w-lg">
+          {fromPlan && cls && <AddFromPlanForm cls={cls} kind={kind} tasks={gradebook.tasks} onDone={() => setFromPlan(false)} />}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={rollCall !== null} onOpenChange={(o) => !o && setRollCall(null)}>
+        <DialogContent className="sm:max-w-2xl">
+          {rollCall && <RollCall classId={classId} task={rollCall} gradebook={gradebook} onDone={() => setRollCall(null)} />}
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={Boolean(markingTask && markingStudent)} onOpenChange={(o) => !o && setMarking(null)}>
         <DialogContent className={kind === 'assessment' ? 'max-h-[92vh] overflow-y-auto sm:max-w-2xl' : 'sm:max-w-md'}>
           {markingTask && markingStudent && (
@@ -340,6 +377,7 @@ function ResultsGrid({
               task={markingTask}
               student={markingStudent}
               result={results.get(resultKey(markingTask.id, markingStudent.id))}
+              presentation={needsPresentation(markingTask) ? presentationOf(markingTask.unit_code, markingStudent.id) : null}
               hasNext={active.findIndex((s) => s.id === markingStudent.id) < active.length - 1}
               onNext={() => {
                 const i = active.findIndex((s) => s.id === markingStudent.id)
@@ -360,6 +398,7 @@ function ResultForm({
   task,
   student,
   result,
+  presentation,
   hasNext,
   onNext,
   onDone,
@@ -369,6 +408,7 @@ function ResultForm({
   task: ClassTask
   student: ClassStudent
   result?: TaskResult
+  presentation?: PresentationState | null
   hasNext: boolean
   onNext: () => void
   onDone: () => void
@@ -418,6 +458,7 @@ function ResultForm({
         </DialogDescription>
       </DialogHeader>
       <div className="grid gap-4">
+        {presentation && <PresentationNote state={presentation} />}
         <fieldset className="space-y-1.5">
           <legend className="mb-1.5 text-sm font-medium">Result</legend>
           <div className="grid grid-cols-2 gap-2">
@@ -455,7 +496,9 @@ function ResultForm({
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="r-date">{isPresentation ? 'Date presented' : 'Date marked'}</Label>
+            <Label htmlFor="r-date">
+              {!isPresentation ? 'Date marked' : value === 'RESCHEDULED' ? 'New presentation date' : value === 'ABSENT' ? 'Date absent' : 'Date presented'}
+            </Label>
             <Input id="r-date" type="date" value={markedOn} onChange={(e) => setMarkedOn(e.target.value)} />
           </div>
         </div>
@@ -463,7 +506,7 @@ function ResultForm({
           {isPresentation ? (
             <Label htmlFor="r-feedback">Feedback</Label>
           ) : (
-            <FeedbackTemplateBar cls={cls} task={task} student={student} result={value} attempt={Number(attempt)} feedback={feedback} onChange={setFeedback} />
+            <FeedbackTemplateBar cls={cls} task={task} student={student} result={value} attempt={Number(attempt)} notPresented={notYetPresented(presentation ?? null)} feedback={feedback} onChange={setFeedback} />
           )}
           <Textarea
             id="r-feedback"
@@ -498,6 +541,34 @@ function ResultForm({
   )
 }
 
+const notYetPresented = (p: PresentationState | null) => p !== null && p.state !== 'presented'
+
+function presentationNote(p: PresentationState) {
+  const unit = p.task.unit_code
+  if (p.state === 'presented') return `Presented ${unit}${p.result.marked_on ? ` on ${formatDate(p.result.marked_on)}` : ''} (${RESULT_SHORT[p.result.result]})`
+  if (p.state === 'absent') return `Absent for the ${unit} presentation${p.result.marked_on ? ` on ${formatDate(p.result.marked_on)}` : ''}`
+  if (p.state === 'rescheduled') return `${unit} presentation rescheduled${p.result.marked_on ? ` to ${formatDate(p.result.marked_on)}` : ''}`
+  return `Hasn't presented ${unit} yet`
+}
+
+/** On Assessment 2: whether the student has shown their performance in the unit's presentation. */
+function PresentationNote({ state }: { state: PresentationState }) {
+  const ok = state.state === 'presented'
+  return (
+    <p
+      className={cn(
+        'flex items-start gap-2 rounded-md border px-3 py-2 text-xs',
+        ok ? 'border-success/30 bg-success/5 text-success' : 'border-warning/40 bg-warning/10 text-[oklch(0.45_0.12_60)]',
+      )}
+    >
+      {ok ? <Presentation className="mt-px size-3.5 shrink-0" /> : <AlertTriangle className="mt-px size-3.5 shrink-0" />}
+      <span>
+        {presentationNote(state)}.{!ok && ' Assessment 2 needs their performance, so check before marking it satisfactory.'}
+      </span>
+    </p>
+  )
+}
+
 /** Pick a feedback template for the result, filled in for this student and unit; copy the feedback. */
 function FeedbackTemplateBar({
   cls,
@@ -505,6 +576,7 @@ function FeedbackTemplateBar({
   student,
   result,
   attempt,
+  notPresented,
   feedback,
   onChange,
 }: {
@@ -513,13 +585,14 @@ function FeedbackTemplateBar({
   student: ClassStudent
   result: TaskResultValue | ''
   attempt: number
+  notPresented: boolean
   feedback: string
   onChange: (feedback: string) => void
 }) {
   const me = useProfile()
   const templates = useFeedbackTemplates()
   const evidence = useUnitEvidence(task.unit_code)
-  const suggested = suggestedOutcome(result, attempt)
+  const suggested = suggestedOutcome(result, attempt, notPresented)
   const options = useMemo(() => {
     const list = templates.data ?? []
     // The suggested result's templates first, then the rest in their usual order.

@@ -575,7 +575,7 @@ api.get('/feedback-templates', async (c) =>
     await run(c, (sql) =>
       sql(`select * from public.feedback_templates
            order by owner_id nulls first,
-                    array_position(array['satisfactory', 'reassessment', 'not_satisfactory_final', 'not_submitted', 'other'], outcome),
+                    array_position(array['satisfactory', 'reassessment', 'not_satisfactory_final', 'not_submitted', 'not_presented', 'other'], outcome),
                     name`),
     ),
   ),

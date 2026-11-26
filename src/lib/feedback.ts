@@ -8,6 +8,7 @@ export const OUTCOME_LABEL: Record<FeedbackOutcome, string> = {
   reassessment: 'Reassessment',
   not_satisfactory_final: 'Not satisfactory after 2nd reassessment',
   not_submitted: 'Not submitted',
+  not_presented: "Didn't present",
   other: 'Other',
 }
 
@@ -35,8 +36,10 @@ export const PLACEHOLDERS: { name: string; description: string }[] = [
 ]
 
 /** The template to suggest for a result: S, NYS (by attempt) or not submitted. */
-export function suggestedOutcome(result: TaskResultValue | '', attempt: number): FeedbackOutcome | null {
+export function suggestedOutcome(result: TaskResultValue | '', attempt: number, notPresented = false): FeedbackOutcome | null {
   if (result === 'S') return 'satisfactory'
+  // Assessment 2 without the presentation that shows the student's performance.
+  if (notPresented && (result === 'NYS' || result === 'NS')) return 'not_presented'
   if (result === 'NYS') return attempt >= 3 ? 'not_satisfactory_final' : 'reassessment'
   if (result === 'NS') return 'not_submitted'
   return null
